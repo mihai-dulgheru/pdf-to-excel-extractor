@@ -1,3 +1,4 @@
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -5,9 +6,12 @@ from datetime import datetime
 import pandas as pd
 import pdfplumber
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
 
 from functions.calculate_coordinates import calculate_coordinates
+from functions.convert_to_date import convert_to_date
+from functions.format_nc8_code import format_nc8_code
 from functions.get_bnr_exchange_rate import get_bnr_exchange_rate
 from functions.get_country_code_from_address import get_country_code_from_address
 from functions.get_delivery_location import get_delivery_location
@@ -17,8 +21,17 @@ from functions.get_delivery_location import get_delivery_location
 class Constants:
     __slots__ = ()
 
+    COLUMN_FORMATS = {"nr_crt": "General", "company": "General", "invoice_number": "0", "nc8_code": "00 00 0000",
+                      "origin": "General", "destination": "General", "invoice_value_eur": "#,##0.00",
+                      "net_weight": "#,##0.00", "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000;-#,##0.0000",
+                      "value_ron": "#,##0;-#,##0", "vat_number": "General", "delivery_location": "General",
+                      "delivery_condition": "General", "percentage": "0.00", "transport": "#,##0.00",
+                      "statistic": "#,##0;-#,##0", }
+
     COLUMNS = ["company", "invoice_number", "nc8_code", "origin", "destination", "invoice_value_eur", "net_weight",
                "shipment_date", "exchange_rate", "value_ron", "vat_number", "delivery_location", "delivery_condition"]
+
+    FONT_SIZE = 12
 
     HEADERS = {"nr_crt": "Nr Crt", "company": "Firma", "invoice_number": "Nr Factura Marfa", "nc8_code": "Cod NC8",
                "origin": "Origine", "destination": "Destinatie", "invoice_value_eur": "Val Fact Euro",
@@ -30,6 +43,8 @@ class Constants:
     PROPORTIONS = {"section_1": (0.0, 0.0, 1.0, 0.16), "section_2": (0.0, 0.16, 0.46, 0.54),
                    "section_3": (0.46, 0.16, 1.0, 0.54), "section_4": (0.0, 0.54, 1.0, 0.93),
                    "section_5": (0.0, 0.93, 1.0, 1.0), }
+
+    SCALING_FACTOR = 1.2
 
 
 class InvoiceProcessor:
@@ -44,8 +59,6 @@ class InvoiceProcessor:
             with pdfplumber.open(pdf_path) as pdf:
                 first_page = pdf.pages[0]
                 page_width, page_height = first_page.width, first_page.height
-
-                # self._extract_sections_as_images(first_page, page_width, page_height)
 
                 section_2_text = self._extract_section_text(first_page, "section_2", page_width, page_height)
                 company = self._extract_field(section_2_text, r"Our payment address\n(.+)", "Unknown")
@@ -98,14 +111,6 @@ class InvoiceProcessor:
                                     invoice_value_ron, vat_number, delivery_location, delivery_condition]
 
     @staticmethod
-    def _extract_sections_as_images(page, page_width, page_height):
-        for section_name, proportion in Constants.PROPORTIONS.items():
-            section_coords = calculate_coordinates(page_width, page_height, proportion)
-            section_image = page.within_bbox(section_coords).to_image()
-            image_path = f"output/{section_name}.png"
-            section_image.save(image_path)
-
-    @staticmethod
     def _extract_section_text(page, section_name, page_width, page_height):
         section_coords = calculate_coordinates(page_width, page_height, Constants.PROPORTIONS[section_name])
         return page.within_bbox(section_coords).extract_text()
@@ -135,11 +140,19 @@ class InvoiceProcessor:
         lines = bbox_text.splitlines() if bbox_text else []
         last_line = lines[-1] if lines else ""
         if "*" in last_line:
-            currency, currency_value = last_line.split("*")[0].strip().lower(), last_line.split("*")[-1].strip()
+            currency, raw_value = last_line.split("*")[0].strip().lower(), last_line.split("*")[-1].strip()
+            cleaned_value = raw_value.replace(".", "").replace(",", "")
+            try:
+                if len(cleaned_value) > 2:
+                    numeric_value = float(cleaned_value[:-2] + "." + cleaned_value[-2:])
+                else:
+                    numeric_value = float("0." + cleaned_value.zfill(2))
+            except ValueError:
+                return 0, 0
             if currency == "eur":
-                return float(currency_value.replace(",", "").replace(".", ".")), 0
+                return numeric_value, 0
             elif currency == "ron":
-                return 0, float(currency_value.replace(".", "").replace(",", "."))
+                return 0, numeric_value
         return 0, 0
 
     @staticmethod
@@ -155,13 +168,9 @@ class ExcelGenerator:
         self.data = data
 
     def generate_excel(self, path):
-        """
-        Main method to generate the Excel file.
-        """
         self._prepare_data()
-        self.data = self.data.sort_values(by=["vat_number", "shipment_date"]).reset_index(drop=True)
-        self.data = self._add_totals(["net_weight", "value_ron", "statistic"], group_by="vat_number")
-        self.data = self._add_excel_formulas()
+        self._add_totals(["net_weight", "value_ron", "statistic"], group_by="vat_number")
+        self._add_excel_formulas()
 
         wb = Workbook()
         ws = wb.active
@@ -174,23 +183,16 @@ class ExcelGenerator:
         print(f"Excel file saved to {path}")
 
     def _prepare_data(self):
-        """
-        Prepare data by adding required columns and merging NC8 codes.
-        """
+        self.data = self.data.sort_values(by=["vat_number", "shipment_date"]).reset_index(drop=True)
         self.data.insert(0, "nr_crt", range(1, len(self.data) + 1))
         self.data["percentage"] = 0.6
         self.data["transport"] = ""
         self.data["statistic"] = ""
-
-        # Merge unique NC8 codes into a single cell, separated by commas
-        for index, row in self.data.iterrows():
-            unique_nc8_codes = sorted(set(row["nc8_code"].split(", ")))
-            self.data.at[index, "nc8_code"] = ", ".join(unique_nc8_codes)
+        self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
+        self.data["invoice_number"] = self.data["invoice_number"].fillna(0).astype(int)
+        self.data["nc8_code"] = self.data["nc8_code"].str.split(", ").str[0].apply(format_nc8_code)
 
     def _add_totals(self, columns_to_total, group_by=None):
-        """
-        Add total rows for specified columns, grouped by a key if provided.
-        """
         current_row_offset = 1
 
         if group_by:
@@ -227,12 +229,7 @@ class ExcelGenerator:
 
             self.data = pd.concat([self.data, pd.DataFrame([total_row])], ignore_index=True)
 
-        return self.data
-
     def _add_excel_formulas(self):
-        """
-        Add Excel formulas for transport and statistic columns.
-        """
         for i, row in self.data.iterrows():
             excel_row = i + 2
 
@@ -260,32 +257,45 @@ class ExcelGenerator:
             else:
                 self.data.at[i, "statistic"] = ""
 
-        return self.data
-
     @staticmethod
     def _write_headers(ws):
-        """
-        Write the column headers to the Excel sheet.
-        """
+        header_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
         for col_num, header in enumerate(Constants.HEADERS.values(), 1):
             cell = ws.cell(row=1, column=col_num, value=header)
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.font = Font(bold=True, size=Constants.FONT_SIZE, name="Arial")
+            cell.alignment = Alignment(horizontal="left", vertical="bottom", wrap_text=True)
+            cell.fill = header_fill
+
+        ws.freeze_panes = "A2"
 
     def _write_rows(self, ws):
-        """
-        Write data rows to the Excel sheet.
-        """
+        headers_keys = list(Constants.HEADERS.keys())
+
         for i, row in self.data.iterrows():
             is_falsy = pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == ""
             for col_num, cell_value in enumerate(row, 1):
                 cell = ws.cell(row=i + 2, column=col_num, value=cell_value)
+                header = headers_keys[col_num - 1]
                 if is_falsy:
-                    cell.font = Font(bold=True)
+                    cell.font = Font(bold=True, size=12, name="Arial")
+                else:
+                    cell.font = Font(size=12, name="Arial")
+                if header in Constants.COLUMN_FORMATS:
+                    cell.number_format = Constants.COLUMN_FORMATS[header]
+
+        for col_num, header in enumerate(Constants.HEADERS.values(), 1):
+            column_letter = get_column_letter(col_num)
+            max_length = len(header)
+            for row in ws.iter_rows(min_col=col_num, max_col=col_num, min_row=2, values_only=True):
+                value = row[0]
+                if value is not None:
+                    max_length = max(max_length, len(str(value)))
+            adjusted_width = max_length * (Constants.FONT_SIZE / 10) * Constants.SCALING_FACTOR
+            ws.column_dimensions[column_letter].width = adjusted_width + 2
 
 
 if __name__ == "__main__":
-    input_paths = ["pdfs/0912626530_C015000044_ZSM0_001.PDF", "pdfs/9610169997_2007000000_ZSM0_001.PDF"]
+    input_paths = [os.path.join("pdfs", file) for file in os.listdir("pdfs") if file.lower().endswith(".pdf")]
     processor = InvoiceProcessor(input_paths)
     processor.process_invoices()
 
