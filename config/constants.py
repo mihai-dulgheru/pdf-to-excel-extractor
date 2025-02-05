@@ -29,3 +29,5 @@ class Constants:
                    "section_5": (0.0, 0.93, 1.0, 1.0), }
 
     SCALING_FACTOR = 1.2
+
+    CONFIG_FILE = "config.json"
