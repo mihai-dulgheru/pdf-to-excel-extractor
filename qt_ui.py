@@ -7,8 +7,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtGui import QIcon, QFont
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QProgressBar,
-                             QSpinBox, QMessageBox)
+                             QSpinBox, QMessageBox, QScrollArea, QFrame, QAbstractSpinBox)
 
 from config import Constants
 from modules.excel_generator import ExcelGenerator
@@ -84,18 +85,15 @@ class ProcessingThread(QThread):
         with TemporaryDirectory() as temp_dir:
             input_paths = self.copy_files_to_temp(temp_dir)
 
-            # Create the InvoiceProcessor with a callback to update progress
             processor = InvoiceProcessor(input_paths, progress_callback=self._progress_callback)
             processor.process_invoices()
 
-            # Generate Excel file in the temporary directory
             excel_filename = self.generate_excel_filename()
             output_temp_path = os.path.join(temp_dir, excel_filename)
 
             excel_generator = ExcelGenerator(processor.df, self.percentage)
             excel_generator.generate_excel(output_temp_path)
 
-            # Move the final Excel file to the current working directory
             output_final_path = os.path.join(os.getcwd(), excel_filename)
             shutil.move(output_temp_path, output_final_path)
 
@@ -136,41 +134,119 @@ class PDFToExcelApp(QWidget):
         """
         super().__init__()
 
+        self.setWindowIcon(QIcon("assets/icon.png"))
+        self.resize(800, 600)
+        font = QFont("Segoe UI", 13)
+        self.setFont(font)
+
         self.setWindowTitle("Procesor PDF în Excel")
-        self.setGeometry(100, 100, 500, 300)
         self.layout = QVBoxLayout()
 
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+
+        self.content_frame = QFrame()
+        self.content_frame.setObjectName("ContentFrame")
+        self.content_layout = QVBoxLayout(self.content_frame)
+
         self.label = QLabel("Selectați fișiere PDF")
-        self.layout.addWidget(self.label)
+        self.content_layout.addWidget(self.label)
 
         self.select_button = QPushButton("Alegeți fișiere")
         self.select_button.clicked.connect(self.select_files)
-        self.layout.addWidget(self.select_button)
+        self.content_layout.addWidget(self.select_button)
 
         self.percentage_label = QLabel("Introduceți procentul:")
-        self.layout.addWidget(self.percentage_label)
+        self.content_layout.addWidget(self.percentage_label)
 
         self.percentage_input = QSpinBox()
         self.percentage_input.setRange(0, 99)
         self.percentage_input.setValue(60)
-        self.layout.addWidget(self.percentage_input)
+        self.percentage_input.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.content_layout.addWidget(self.percentage_input)
 
         self.process_button = QPushButton("Încărcați și procesați")
         self.process_button.clicked.connect(self.process_files)
         self.process_button.setEnabled(False)
-        self.layout.addWidget(self.process_button)
+        self.content_layout.addWidget(self.process_button)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setValue(0)
-        self.layout.addWidget(self.progress_bar)
+        self.content_layout.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
-        self.layout.addWidget(self.status_label)
+        self.content_layout.addWidget(self.status_label)
+
+        scroll_area.setWidget(self.content_frame)
+        self.layout.addWidget(scroll_area)
 
         self.setLayout(self.layout)
         self.files = []
         self.processing_thread = None
         self.last_directory = load_last_directory()
+
+        self.setStyleSheet("""
+            QWidget {
+                margin: 0; 
+                padding: 0;
+                background-color: #ffffff;
+            }
+
+            #ContentFrame {
+                margin: 30px auto;
+                padding: 20px;
+                max-width: 900px;
+                border: none;
+                border-radius: 8px;
+                background-color: #f0f0f0;
+            }
+
+            QLabel {
+                font-family: 'Segoe UI';
+                font-size: 15pt;
+                color: #333333;
+                background-color: #f0f0f0;
+            }
+
+            QSpinBox {
+                padding: 10px;
+                height: 40px;
+                font-family: 'Segoe UI';
+                font-size: 15pt;
+                color: #333333;
+            }
+
+            QProgressBar {
+                margin-top: 10px;
+                margin-bottom: 10px;
+                height: 40px;
+                font-family: 'Segoe UI';
+                font-size: 15pt;
+                color: #333333;
+                text-align: center;
+                background-color: #ffffff;
+                border-radius: 6px;
+            }
+            QProgressBar::chunk {
+                color: #ffffff;
+                background-color: #6c9acf;
+                border-radius: 6px;
+            }
+
+            QPushButton {
+                margin-top: 10px;
+                padding: 10px 20px;
+                font-family: 'Segoe UI';
+                font-size: 15pt;
+                color: #ffffff;
+                background-color: #6c9acf;
+                border: 1px solid #5c8bb8;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #5c8bb8;
+            }
+        """)
 
     def show_message(self, title, message, icon=QMessageBox.Icon.Information):
         """
@@ -215,7 +291,6 @@ class PDFToExcelApp(QWidget):
         percentage = self.percentage_input.value() / 100.0
         self.processing_thread = ProcessingThread(self.files, percentage)
 
-        # Connect the thread signals to local methods
         self.processing_thread.progress_signal.connect(self.on_progress_update)
         self.processing_thread.finished.connect(self.on_processing_finished)
 
@@ -232,7 +307,8 @@ class PDFToExcelApp(QWidget):
         """
         Handle the finalization of the processing thread.
         Prompt the user to save the resulting Excel file or display errors.
-        :param output_path: The final path of the generated Excel file, or empty string if an error occurred.
+        :param output_path: The final path of the generated Excel file,
+                            or empty string if an error occurred.
         """
         self.progress_bar.setValue(100)
         self.process_button.setEnabled(True)

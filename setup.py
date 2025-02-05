@@ -12,7 +12,7 @@ options = ["qt_ui.py",  # Main application file
            "--add-data=config;config",  # Include config directory
            "--add-data=functions;functions",  # Include functions directory
            "--add-data=modules;modules",  # Include modules directory
-           # "--icon=icon.ico",  # Set application icon (optional)
+           "--icon=assets/icon.ico",  # Set application icon (optional)
            ]
 
 run(options)

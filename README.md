@@ -47,12 +47,10 @@ Below is a brief overview of the relevant directories and files:
 pdf-to-excel-extractor/
 ├── config/               # Configuration (e.g., proportions, constants)
 │   └── ...
-├── config.json           # JSON file for storing persistent settings (e.g., last directory)
 ├── functions/            # Utility functions (e.g., coordinates, exchange rate)
 │   └── ...
 ├── modules/              # Core modules (e.g., InvoiceProcessor, ExcelGenerator)
 │   └── ...
-├── .venv/                # (Optional) Virtual environment folder
 ├── qt_ui.py              # PyQt6 user interface code
 ├── main.py               # Main Python script for launching the app
 ├── requirements.txt      # Python dependencies
