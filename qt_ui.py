@@ -187,15 +187,15 @@ class PDFToExcelApp(QWidget):
 
         self.setStyleSheet("""
             QWidget {
-                margin: 0; 
+                margin: 0;
                 padding: 0;
                 background-color: #ffffff;
             }
 
             #ContentFrame {
-                margin: 30px auto;
+                margin: 20px auto;
                 padding: 20px;
-                max-width: 900px;
+                max-width: 896px;
                 border: none;
                 border-radius: 8px;
                 background-color: #f0f0f0;
@@ -203,25 +203,25 @@ class PDFToExcelApp(QWidget):
 
             QLabel {
                 font-family: 'Segoe UI';
-                font-size: 15pt;
+                font-size: 14pt;
                 color: #333333;
                 background-color: #f0f0f0;
             }
 
             QSpinBox {
-                padding: 10px;
+                padding: 8px;
                 height: 40px;
                 font-family: 'Segoe UI';
-                font-size: 15pt;
+                font-size: 14pt;
                 color: #333333;
             }
 
             QProgressBar {
-                margin-top: 10px;
-                margin-bottom: 10px;
+                margin-top: 8px;
+                margin-bottom: 8px;
                 height: 40px;
                 font-family: 'Segoe UI';
-                font-size: 15pt;
+                font-size: 14pt;
                 color: #333333;
                 text-align: center;
                 background-color: #ffffff;
@@ -234,10 +234,10 @@ class PDFToExcelApp(QWidget):
             }
 
             QPushButton {
-                margin-top: 10px;
-                padding: 10px 20px;
+                margin-top: 8px;
+                padding: 8px 16px;
                 font-family: 'Segoe UI';
-                font-size: 15pt;
+                font-size: 14pt;
                 color: #ffffff;
                 background-color: #6c9acf;
                 border: 1px solid #5c8bb8;
