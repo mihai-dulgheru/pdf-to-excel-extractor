@@ -5,6 +5,7 @@
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/output" />
       <excludeFolder url="file://$MODULE_DIR$/pdfs" />
+      <excludeFolder url="file://$MODULE_DIR$/input" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.12 (pdf-to-excel-extractor)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

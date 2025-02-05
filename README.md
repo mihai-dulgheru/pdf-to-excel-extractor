@@ -100,9 +100,9 @@ pytest tests/
 │   ├── renderer/         # Frontend HTML, CSS, and JS files
 │   └── package.json      # Node.js dependencies and scripts
 ├── functions/            # Utility functions
+├── input/                # Input PDFs
 ├── modules/              # Core modules (InvoiceProcessor, ExcelGenerator)
 ├── output/               # Generated Excel files
-├── pdfs/                 # Input PDFs
 ├── postman/              # Postman collection for API testing
 ├── tests/                # Unit tests for the backend
 ├── main.py               # Main script for command-line usage

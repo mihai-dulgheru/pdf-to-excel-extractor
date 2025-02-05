@@ -4,7 +4,7 @@ from datetime import datetime
 from modules import InvoiceProcessor, ExcelGenerator
 
 if __name__ == "__main__":
-    input_paths = [os.path.join("pdfs", file) for file in os.listdir("pdfs") if file.lower().endswith(".pdf")]
+    input_paths = [os.path.join("input", file) for file in os.listdir("input") if file.lower().endswith(".pdf")]
     processor = InvoiceProcessor(input_paths)
     processor.process_invoices()
 
