@@ -6,7 +6,10 @@ def format_nc8_code(value):
     if not value:
         return value
 
-    value = "".join(char for char in str(value) if char.isdigit())
-    if len(value) == 8:
-        return f"{value[:2]} {value[2:4]} {value[4:]}"
-    return value
+    original_value = value
+    numeric_value = "".join(char for char in str(value) if char.isdigit())
+
+    if len(numeric_value) == 8:
+        return f"{numeric_value[:2]} {numeric_value[2:4]} {numeric_value[4:]}"
+
+    return original_value

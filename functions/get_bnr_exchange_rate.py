@@ -12,7 +12,7 @@ def get_bnr_exchange_rate(expedition_date, currency="EUR"):
     """
     max_attempts = 5
     for attempt in range(max_attempts):
-        date_to_check = (expedition_date - timedelta(days=attempt + 1)).strftime("%Y-%m-%d")
+        date_to_check = (expedition_date - timedelta(days=attempt)).strftime("%Y-%m-%d")
         print(f"Fetching exchange rate for {currency} on {date_to_check}")
 
         try:
@@ -27,13 +27,15 @@ def get_bnr_exchange_rate(expedition_date, currency="EUR"):
                 for line in exchange_rate_lines[1:]:
                     columns = line.split(",")
                     if columns[2] == currency:  # Column `CURRENCY`
-                        return float(columns[7])  # Column `OBS_VALUE`
+                        exchange_rate = float(columns[7])  # Column `OBS_VALUE`
+                        print(f"[LOG] Exchange Rate: {exchange_rate}")
+                        return exchange_rate
 
                 print(f"Exchange rate for {currency} not found on {date_to_check}")
             else:
-                print(f"Error fetching exchange rate: {response.status_code} {response.reason}")
+                print(f"[LOG] Error fetching exchange rate: {response.status_code} {response.reason}")
         except Exception as e:
-            print(f"Exception while fetching exchange rate: {e}")
+            print(f"[LOG] Exception while fetching exchange rate: {e}")
 
-    print(f"Could not fetch exchange rate for {currency} after {max_attempts} attempts.")
+    print(f"[LOG] Could not fetch exchange rate for {currency} after {max_attempts} attempts.")
     return None

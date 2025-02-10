@@ -195,7 +195,6 @@ class PDFToExcelApp(QWidget):
             #ContentFrame {
                 margin: 20px auto;
                 padding: 20px;
-                max-width: 896px;
                 border: none;
                 border-radius: 8px;
                 background-color: #f0f0f0;
