@@ -8,7 +8,7 @@ class Constants:
     COLUMN_FORMATS = {"nr_crt": "General", "company": "General", "invoice_number": "0", "nc8_code": "00 00 0000",
                       "origin": "General", "destination": "General", "invoice_value_eur": "#,##0.00",
                       "net_weight": "#,##0", "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000;-#,##0.0000",
-                      "value_ron": "#,##0;-#,##0", "vat_number": "General", "delivery_location": "General",
+                      "value_ron": "#,##0;-#,##0", "vat_number": "General", "delivery_location": "0",
                       "delivery_condition": "General", "percentage": "0.00", "transport": "#,##0.00",
                       "statistic": "#,##0;-#,##0", }
 
@@ -52,3 +52,7 @@ class Constants:
     SCALING_FACTOR = 1.2
 
     CONFIG_FILE = "config.json"
+
+    DEFAULT_CODE = 2093
+
+    LOCATION_MAPPING = {"BUDESTI": 1759, "CATEASCA": 1826, "CRAIOVA": 1593, }
