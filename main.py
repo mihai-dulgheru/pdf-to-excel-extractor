@@ -1,15 +1,11 @@
-import os
-from datetime import datetime
+import sys
 
-from modules import InvoiceProcessor, ExcelGenerator
+from PyQt6.QtWidgets import (QApplication)
+
+from qt_ui import PDFToExcelApp
 
 if __name__ == "__main__":
-    input_paths = [os.path.join("input", file) for file in os.listdir("input") if file.lower().endswith(".pdf")]
-    processor = InvoiceProcessor(input_paths)
-    processor.process_invoices()
-
-    current_date = datetime.now().strftime("%m-%Y")
-    output_path = f"output/{current_date}-EXP.xlsx"
-
-    excel_generator = ExcelGenerator(processor.df)
-    excel_generator.generate_excel(output_path)
+    app = QApplication(sys.argv)
+    window = PDFToExcelApp()
+    window.show()
+    sys.exit(app.exec())

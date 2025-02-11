@@ -4,8 +4,7 @@ from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
 from config import Constants
-from functions.convert_to_date import convert_to_date
-from functions.format_nc8_code import format_nc8_code
+from functions import convert_to_date, format_nc8_code
 
 
 class ExcelGenerator:

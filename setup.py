@@ -1,6 +1,6 @@
 from PyInstaller.__main__ import run
 
-options = ["qt_ui.py",  # Main application file
+options = ["main.py",  # Main application file
            "--name=PDFToExcelApp",  # Name of the executable
            "--onefile",  # Generate a single executable file
            "--windowed",  # Run as a GUI application (no terminal window)

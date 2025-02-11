@@ -6,9 +6,7 @@ import pandas as pd
 import pdfplumber
 
 from config import Constants
-from functions.get_bnr_exchange_rate import get_bnr_exchange_rate
-from functions.get_country_code_from_address import get_country_code_from_address
-from functions.get_delivery_location import get_delivery_location
+from functions import calculate_coordinates, get_country_code_from_address, get_bnr_exchange_rate, get_delivery_location
 
 
 class InvoiceProcessor:
@@ -117,7 +115,6 @@ class InvoiceProcessor:
         :return: str
             The extracted text for the specified section.
         """
-        from functions.calculate_coordinates import calculate_coordinates
         section_coords = calculate_coordinates(page_width, page_height, Constants.PROPORTIONS[section_name])
         return page.within_bbox(section_coords).extract_text()
 
@@ -242,8 +239,7 @@ class InvoiceProcessor:
         :return: tuple
             (invoice_value_eur, invoice_value_ron, currency) where currency is str or None.
         """
-        from functions.calculate_coordinates import calculate_coordinates
-        bbox_ratio = (0.56, 0.88, 0.94, 0.94)
+        bbox_ratio = (0.52, 0.88, 0.94, 0.94)
         bbox_coords = calculate_coordinates(page_width, page_height, bbox_ratio)
         bbox_text = last_page.within_bbox(bbox_coords).extract_text()
 
@@ -261,7 +257,7 @@ class InvoiceProcessor:
                 if len(parts) >= 2:
                     currency_detected = parts[0].strip().lower()
                     raw_value = parts[-1].strip()
-                    cleaned_value = raw_value.replace(".", "").replace(",", "")
+                    cleaned_value = raw_value.replace(" ", "").replace(",", "").replace(".", "")
 
                     try:
                         if len(cleaned_value) > 2:

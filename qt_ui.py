@@ -1,15 +1,14 @@
 import json
 import os
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QIcon, QFont
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QProgressBar,
-                             QSpinBox, QMessageBox, QScrollArea, QFrame, QAbstractSpinBox)
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QProgressBar, QSpinBox,
+                             QMessageBox, QScrollArea, QFrame, QAbstractSpinBox)
 
 from config import Constants
 from modules.excel_generator import ExcelGenerator
@@ -43,6 +42,7 @@ def save_last_directory(directory: str):
         print("Failed to save last directory")
 
 
+# noinspection PyUnresolvedReferences
 class ProcessingThread(QThread):
     """
     Background thread that processes PDF invoices, generates Excel files,
@@ -123,6 +123,7 @@ class ProcessingThread(QThread):
             self.finished.emit("")
 
 
+# noinspection PyUnresolvedReferences
 class PDFToExcelApp(QWidget):
     """
     Main application window that allows users to select and process PDF invoices into Excel.
@@ -327,10 +328,3 @@ class PDFToExcelApp(QWidget):
                 self.status_label.setText("Salvarea a fost anulată.")
         else:
             self.show_message("Eroare", "A apărut o eroare în timpul procesării!", QMessageBox.Icon.Critical)
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = PDFToExcelApp()
-    window.show()
-    sys.exit(app.exec())
