@@ -229,7 +229,7 @@ class PDFToExcelApp(QWidget):
             }
             QProgressBar::chunk {
                 color: #ffffff;
-                background-color: #6c9acf;
+                background-color: #00C951;
                 border-radius: 6px;
             }
 

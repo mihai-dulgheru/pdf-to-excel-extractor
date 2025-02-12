@@ -237,47 +237,44 @@ class InvoiceProcessor:
         :param is_credit_note: bool
             True if the document is identified as a credit note, False otherwise.
         :return: tuple
-            (invoice_value_eur, invoice_value_ron, currency) where currency is str or None.
+            (invoice_amount_eur, invoice_amount_ron, currency) where currency is str or None.
         """
-        bbox_ratio = (0.52, 0.88, 0.94, 0.94)
-        bbox_coords = calculate_coordinates(page_width, page_height, bbox_ratio)
-        bbox_text = last_page.within_bbox(bbox_coords).extract_text()
+        bounding_box_ratio = (0.52, 0.88, 0.94, 0.94)
+        bounding_box_coords = calculate_coordinates(page_width, page_height, bounding_box_ratio)
+        extracted_text = last_page.within_bbox(bounding_box_coords).extract_text()
 
-        if not bbox_text:
+        if not extracted_text:
             return 0, 0, None
 
-        lines = bbox_text.splitlines()
-        invoice_value_eur = 0
-        invoice_value_ron = 0
-        currency = None
+        matching_lines = [line.strip().replace('*', ' ') for line in extracted_text.splitlines() if "*" in line]
+        if len(matching_lines) != 1:
+            return 0, 0, None
 
-        for line in lines:
-            if "*" in line:
-                parts = line.split("*")
-                if len(parts) >= 2:
-                    currency_detected = parts[0].strip().lower()
-                    raw_value = parts[-1].strip()
-                    cleaned_value = raw_value.replace(" ", "").replace(",", "").replace(".", "")
+        relevant_line = matching_lines[0]
+        line_parts = [part for part in relevant_line.split(' ') if part]
+        if len(line_parts) < 2:
+            return 0, 0, None
 
-                    try:
-                        if len(cleaned_value) > 2:
-                            numeric_value = float(cleaned_value[:-2] + "." + cleaned_value[-2:])
-                        else:
-                            numeric_value = float("0." + cleaned_value.zfill(2))
-                    except ValueError:
-                        continue
+        detected_currency, raw_amount = line_parts[-2:]
+        detected_currency = detected_currency.strip().lower()
+        raw_amount = raw_amount.strip()
+        cleaned_amount = raw_amount.replace(" ", "").replace(",", "").replace(".", "")
 
-                    if is_credit_note:
-                        numeric_value = -numeric_value
+        try:
+            invoice_value = float(cleaned_amount[:-2] + "." + cleaned_amount[-2:]) if len(
+                cleaned_amount) > 2 else float("0." + cleaned_amount.zfill(2))
+        except ValueError:
+            return 0, 0, None
 
-                    if currency_detected == "eur":
-                        invoice_value_eur = numeric_value
-                        currency = "EUR"
-                    elif currency_detected == "ron":
-                        invoice_value_ron = numeric_value
-                        currency = "RON"
+        if is_credit_note:
+            invoice_value = -invoice_value
 
-        return invoice_value_eur, invoice_value_ron, currency
+        if detected_currency == "eur":
+            return invoice_value, 0, "EUR"
+        elif detected_currency == "ron":
+            return 0, invoice_value, "RON"
+
+        return 0, 0, None
 
     @staticmethod
     def _extract_net_weight(last_page, is_invoice_or_credit_note, currency):
