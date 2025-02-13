@@ -137,11 +137,13 @@ class PDFToExcelApp(QWidget):
 
         self.setWindowIcon(QIcon("assets/icon.png"))
         self.resize(800, 600)
-        font = QFont("Segoe UI", 13)
-        self.setFont(font)
 
+        font = QFont("Segoe UI", 11)
+        self.setFont(font)
         self.setWindowTitle("Procesor PDF în Excel")
+
         self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -149,8 +151,12 @@ class PDFToExcelApp(QWidget):
         self.content_frame = QFrame()
         self.content_frame.setObjectName("ContentFrame")
         self.content_layout = QVBoxLayout(self.content_frame)
+        self.content_layout.setSpacing(16)
 
         self.label = QLabel("Selectați fișiere PDF")
+        label_font = QFont("Segoe UI", 13, QFont.Weight.Bold)
+        self.label.setFont(label_font)
+
         self.content_layout.addWidget(self.label)
 
         self.select_button = QPushButton("Alegeți fișiere")
@@ -167,8 +173,8 @@ class PDFToExcelApp(QWidget):
         self.content_layout.addWidget(self.percentage_input)
 
         self.process_button = QPushButton("Încărcați și procesați")
-        self.process_button.clicked.connect(self.process_files)
         self.process_button.setEnabled(False)
+        self.process_button.clicked.connect(self.process_files)
         self.content_layout.addWidget(self.process_button)
 
         self.progress_bar = QProgressBar()
@@ -176,75 +182,83 @@ class PDFToExcelApp(QWidget):
         self.content_layout.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
+        status_font = QFont("Segoe UI", 10, QFont.Weight.Normal)
+        self.status_label.setFont(status_font)
         self.content_layout.addWidget(self.status_label)
 
         scroll_area.setWidget(self.content_frame)
         self.layout.addWidget(scroll_area)
 
-        self.setLayout(self.layout)
         self.files = []
         self.processing_thread = None
         self.last_directory = load_last_directory()
 
         self.setStyleSheet("""
             QWidget {
+                background-color: #F9FAFB;
                 margin: 0;
                 padding: 0;
-                background-color: #ffffff;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
             }
 
             #ContentFrame {
-                margin: 20px auto;
-                padding: 20px;
+                margin: 24px auto;
+                padding: 24px;
                 border: none;
                 border-radius: 8px;
-                background-color: #f0f0f0;
+                background-color: #F3F4F6;
             }
 
             QLabel {
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-                color: #333333;
-                background-color: #f0f0f0;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; 
+                color: #1F2937;
+                background-color: transparent;
             }
 
             QSpinBox {
                 padding: 8px;
                 height: 40px;
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-                color: #333333;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; 
+                font-size: 13px;
+                color: #111827;
+                background-color: #F9FAFB;
+                border: 1px solid #D1D5DB;
+                border-radius: 4px;
             }
 
             QProgressBar {
                 margin-top: 8px;
                 margin-bottom: 8px;
-                height: 40px;
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-                color: #333333;
+                height: 24px;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; 
+                font-size: 12px;
+                color: #111827;
                 text-align: center;
-                background-color: #ffffff;
+                background-color: #F9FAFB;
+                border: 1px solid #D1D5DB;
                 border-radius: 6px;
             }
+
             QProgressBar::chunk {
                 color: #ffffff;
-                background-color: #00C951;
+                background-color: #3B82F6;
                 border-radius: 6px;
             }
 
             QPushButton {
                 margin-top: 8px;
                 padding: 8px 16px;
-                font-family: 'Segoe UI';
-                font-size: 14pt;
-                color: #ffffff;
-                background-color: #6c9acf;
-                border: 1px solid #5c8bb8;
+                font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+                font-size: 14px;
+                color: #fff;
+                background-color: #2563EB;
+                border: 1px solid #1D4ED8;
                 border-radius: 6px;
             }
+
             QPushButton:hover {
-                background-color: #5c8bb8;
+                background-color: #3B82F6;
             }
         """)
 
