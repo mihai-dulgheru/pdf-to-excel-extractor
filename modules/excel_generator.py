@@ -9,25 +9,22 @@ from functions import convert_to_date, format_nc8_code
 
 class ExcelGenerator:
     """
-    This class handles the creation and formatting of an Excel file
-    from the processed invoice data in a pandas DataFrame.
+    Creates and formats an Excel file from a pandas DataFrame.
     """
+
     __slots__ = ("data", "percentage")
 
     def __init__(self, data, percentage=0.6):
         """
-        Initialize the ExcelGenerator with a pandas DataFrame and a percentage value.
-        :param data: pandas DataFrame containing the invoice information.
-        :param percentage: A float percentage used in calculations.
+        :param data: DataFrame with invoice information.
+        :param percentage: Float percentage for calculations.
         """
         self.data = data
         self.percentage = percentage
 
     def generate_excel(self, path):
         """
-        Main method that prepares data, calculates totals, adds formulas,
-        and writes everything to an Excel file at the specified path.
-        :param path: The output Excel file path.
+        Prepare data, add totals, add formulas, then write to Excel at 'path'.
         """
         self._prepare_data()
         self._add_totals(["net_weight", "value_ron", "statistic"], group_by="vat_number")
@@ -41,11 +38,11 @@ class ExcelGenerator:
         self._write_rows(ws)
 
         wb.save(path)
-        print(f"[LOG] Excel file saved to {path}")  # English log message
+        print(f"[LOG] Excel file saved to {path}")
 
     def _prepare_data(self):
         """
-        Prepare the DataFrame by sorting, inserting extra columns, and cleaning up data.
+        Sort data, insert columns, and clean up for Excel output.
         """
         self.data = self.data.sort_values(by=["vat_number", "shipment_date"]).reset_index(drop=True)
         self.data.insert(0, "nr_crt", range(1, len(self.data) + 1))
@@ -55,7 +52,6 @@ class ExcelGenerator:
         self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
         self.data["invoice_number"] = self.data["invoice_number"].fillna(0)
 
-        # Convert invoice_number to integer if possible
         try:
             self.data["invoice_number"] = self.data["invoice_number"].astype(int)
         except ValueError:
@@ -65,9 +61,7 @@ class ExcelGenerator:
 
     def _add_totals(self, columns_to_total, group_by=None):
         """
-        Add totals (formulas) at the end of each group or at the end of the entire DataFrame.
-        :param columns_to_total: A list of column names to sum up.
-        :param group_by: If provided, totals are inserted after each group.
+        Insert total rows after each group or at the end of the DataFrame.
         """
         current_row_offset = 1
 
@@ -106,36 +100,31 @@ class ExcelGenerator:
 
     def _add_excel_formulas(self):
         """
-        Add in-cell formulas to the DataFrame for columns like value_ron, invoice_value_eur, transport, and statistic.
+        Add in-cell formulas for computed columns (value_ron, invoice_value_eur, transport, statistic).
         """
         for i, row in self.data.iterrows():
             excel_row = i + 2
-
             cell_exchange_rate = f"J{excel_row}"
             cell_net_weight = f"H{excel_row}"
             cell_value_eur = f"G{excel_row}"
             cell_value_ron = f"K{excel_row}"
             cell_percentage = f"O{excel_row}"
 
-            # Skip total rows or empty rows
+            # Skip total/empty rows
             if pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == "":
                 continue
 
-            # If RON is 0, calculate it
             if row["value_ron"] == 0:
                 self.data.at[i, "value_ron"] = f"={cell_value_eur}*{cell_exchange_rate}"
 
-            # If EUR is 0, calculate it
             if row["invoice_value_eur"] == 0:
                 self.data.at[i, "invoice_value_eur"] = f"={cell_value_ron}/{cell_exchange_rate}"
 
-            # Transport formula
             if pd.notna(row["net_weight"]) and pd.notna(row["exchange_rate"]):
                 self.data.at[i, "transport"] = f"=28000*{cell_exchange_rate}/147000*{cell_net_weight}"
             else:
                 self.data.at[i, "transport"] = ""
 
-            # Statistic formula
             if pd.notna(row["value_ron"]):
                 self.data.at[i, "statistic"] = f"=ROUND({cell_value_ron}+{cell_percentage}*{cell_exchange_rate}, 0)"
             else:
@@ -144,8 +133,7 @@ class ExcelGenerator:
     @staticmethod
     def _write_headers(ws):
         """
-        Write the column headers into the worksheet, apply styling,
-        and freeze the header row.
+        Write column headers, apply style, freeze header row.
         """
         header_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
         for col_num, header in enumerate(Constants.HEADERS.values(), 1):
@@ -157,35 +145,29 @@ class ExcelGenerator:
 
     def _write_rows(self, ws):
         """
-        Write the data rows into the worksheet, including any formulas,
-        and adjust column widths for readability.
+        Write DataFrame rows, including formulas, and adjust column widths.
         """
         headers_keys = list(Constants.HEADERS.keys())
-
-        # Write cell values
         for i, row in self.data.iterrows():
             is_total_row = pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == ""
             for col_num, cell_value in enumerate(row, 1):
                 cell = ws.cell(row=i + 2, column=col_num, value=cell_value)
                 header_key = headers_keys[col_num - 1]
 
-                # Styling for totals
                 if is_total_row:
                     cell.font = Font(bold=True, size=12, name="Arial")
                 else:
                     cell.font = Font(size=12, name="Arial")
 
-                # Apply number format if defined in Constants.COLUMN_FORMATS
                 if header_key in Constants.COLUMN_FORMATS:
                     cell.number_format = Constants.COLUMN_FORMATS[header_key]
 
-        # Auto-adjust column widths
         for col_num, header in enumerate(Constants.HEADERS.values(), 1):
-            column_letter = get_column_letter(col_num)
-            max_length = len(header)
+            col_letter = get_column_letter(col_num)
+            max_len = len(header)
             for row in ws.iter_rows(min_col=col_num, max_col=col_num, min_row=2, values_only=True):
-                value = row[0]
-                if value is not None:
-                    max_length = max(max_length, len(str(value)))
-            adjusted_width = max_length * (Constants.FONT_SIZE / 10) * Constants.SCALING_FACTOR
-            ws.column_dimensions[column_letter].width = adjusted_width + 2
+                val = row[0]
+                if val is not None:
+                    max_len = max(max_len, len(str(val)))
+            adjusted_width = max_len * (Constants.FONT_SIZE / 10) * Constants.SCALING_FACTOR
+            ws.column_dimensions[col_letter].width = adjusted_width + 2

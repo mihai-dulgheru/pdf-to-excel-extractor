@@ -17,8 +17,8 @@ from modules.invoice_processor import InvoiceProcessor
 
 def load_last_directory():
     """
-    Load the last used directory from the configuration file.
-    If the config file is missing or invalid, return the user's home directory.
+    Load the last used directory from the config file.
+    If missing or invalid, return the user's home directory.
     """
     if os.path.exists(Constants.CONFIG_FILE):
         try:
@@ -31,13 +31,12 @@ def load_last_directory():
 
 def save_last_directory(directory: str):
     """
-    Save the given directory path as the last used directory in the configuration file.
-    If writing fails, print an error message in English.
+    Save the given directory path as the last used directory in the config file.
+    Print an error message in case of failure.
     """
     try:
         with open(Constants.CONFIG_FILE, "w", encoding="utf-8") as f:
-            json_data = json.dumps({"last_directory": directory}, indent=4)
-            f.write(json_data)
+            f.write(json.dumps({"last_directory": directory}, indent=4))
     except IOError:
         print("Failed to save last directory")
 
@@ -45,96 +44,81 @@ def save_last_directory(directory: str):
 # noinspection PyUnresolvedReferences
 class ProcessingThread(QThread):
     """
-    Background thread that processes PDF invoices, generates Excel files,
+    Background thread that processes PDF invoices, generates an Excel file,
     and emits signals for progress and completion.
     """
     finished = pyqtSignal(str)
     progress_signal = pyqtSignal(int)
 
-    def __init__(self, files, percentage):
+    def __init__(self, pdf_files, percentage):
         """
-        Initialize the ProcessingThread with a list of PDF file paths and a percentage value.
-        :param files: List of PDF file paths to process.
-        :param percentage: The percentage (float) to be applied in calculations.
+        :param pdf_files: List of PDF file paths to process.
+        :param percentage: Float percentage for calculations.
         """
         super().__init__()
-        self.files = files
+        self.pdf_files = pdf_files
         self.percentage = percentage
 
     def copy_files_to_temp(self, temp_dir: str):
         """
-        Copy input PDF files to a temporary directory and return their new paths.
-        :param temp_dir: The path of the temporary directory.
-        :return: A list of new file paths in the temp directory.
+        Copy PDF files to a temporary directory.
+        :return: List of new file paths.
         """
-        return [shutil.copy(str(Path(file)), os.path.join(temp_dir, Path(file).name)) for file in self.files]
+        return [shutil.copy(str(Path(pdf)), os.path.join(temp_dir, Path(pdf).name)) for pdf in self.pdf_files]
 
     @staticmethod
     def generate_excel_filename():
         """
-        Generate an Excel filename based on the current month and year.
-        :return: A string representing the generated filename.
+        Generate an Excel filename based on current month and year.
         """
         return f"{datetime.now().strftime('%m-%Y')}-EXP.xlsx"
 
     def process_invoices(self):
         """
-        Process the PDF invoices in a temporary directory and generate the final Excel file.
-        :return: The final path of the generated Excel file.
+        Process PDF invoices in a temp directory; create the final Excel file.
+        :return: Final path of the generated Excel.
         """
         with TemporaryDirectory() as temp_dir:
-            input_paths = self.copy_files_to_temp(temp_dir)
-
-            processor = InvoiceProcessor(input_paths, progress_callback=self._progress_callback)
+            temp_paths = self.copy_files_to_temp(temp_dir)
+            processor = InvoiceProcessor(temp_paths, progress_callback=self._progress_callback)
             processor.process_invoices()
 
             excel_filename = self.generate_excel_filename()
-            output_temp_path = os.path.join(temp_dir, excel_filename)
+            temp_excel_path = os.path.join(temp_dir, excel_filename)
+            generator = ExcelGenerator(processor.df, self.percentage)
+            generator.generate_excel(temp_excel_path)
 
-            excel_generator = ExcelGenerator(processor.df, self.percentage)
-            excel_generator.generate_excel(output_temp_path)
-
-            output_final_path = os.path.join(os.getcwd(), excel_filename)
-            shutil.move(output_temp_path, output_final_path)
-
-        return output_final_path
+            final_path = os.path.join(os.getcwd(), excel_filename)
+            shutil.move(temp_excel_path, final_path)
+        return final_path
 
     def _progress_callback(self, processed, total):
         """
-        Callback function that calculates the current progress as an integer percentage
-        and emits it through the progress_signal.
-        :param processed: Number of processed files.
-        :param total: Total number of files.
+        Calculate integer progress and emit the signal.
         """
-        progress_value = int((processed / total) * 100)
-        self.progress_signal.emit(progress_value)
+        progress_val = int((processed / total) * 100)
+        self.progress_signal.emit(progress_val)
 
     def run(self):
         """
-        Entry point for the QThread.
-        It calls process_invoices() and emits a 'finished' signal with the resulting path.
-        If an exception occurs, it emits an empty string.
+        Run the invoice processing; emit 'finished' with output path.
         """
         try:
             output_path = self.process_invoices()
             self.finished.emit(output_path)
         except Exception as e:
-            print(f"Error in processing thread: {e}")
+            print(f"[LOG] Error in ProcessingThread: {e}")
             self.finished.emit("")
 
 
 # noinspection PyUnresolvedReferences
 class PDFToExcelApp(QWidget):
     """
-    Main application window that allows users to select and process PDF invoices into Excel.
+    Main window for selecting and processing PDF invoices into Excel.
     """
 
     def __init__(self):
-        """
-        Initialize the main window, UI elements, and default states.
-        """
         super().__init__()
-
         self.setWindowIcon(QIcon("assets/icon.png"))
         self.resize(800, 600)
 
@@ -142,8 +126,8 @@ class PDFToExcelApp(QWidget):
         self.setFont(font)
         self.setWindowTitle("Procesor PDF în Excel")
 
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
 
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -156,11 +140,10 @@ class PDFToExcelApp(QWidget):
         self.label = QLabel("Selectați fișiere PDF")
         label_font = QFont("Segoe UI", 13, QFont.Weight.Bold)
         self.label.setFont(label_font)
-
         self.content_layout.addWidget(self.label)
 
         self.select_button = QPushButton("Alegeți fișiere")
-        self.select_button.clicked.connect(self.select_files)
+        self.select_button.clicked.connect(self.select_pdf_files)
         self.content_layout.addWidget(self.select_button)
 
         self.percentage_label = QLabel("Introduceți procentul:")
@@ -174,7 +157,7 @@ class PDFToExcelApp(QWidget):
 
         self.process_button = QPushButton("Încărcați și procesați")
         self.process_button.setEnabled(False)
-        self.process_button.clicked.connect(self.process_files)
+        self.process_button.clicked.connect(self.start_file_processing)
         self.content_layout.addWidget(self.process_button)
 
         self.progress_bar = QProgressBar()
@@ -187,9 +170,9 @@ class PDFToExcelApp(QWidget):
         self.content_layout.addWidget(self.status_label)
 
         scroll_area.setWidget(self.content_frame)
-        self.layout.addWidget(scroll_area)
+        self.main_layout.addWidget(scroll_area)
 
-        self.files = []
+        self.pdf_files = []
         self.processing_thread = None
         self.last_directory = load_last_directory()
 
@@ -201,7 +184,6 @@ class PDFToExcelApp(QWidget):
                 font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
                 color: #111827;
             }
-
             #ContentFrame {
                 margin: 24px auto;
                 padding: 24px;
@@ -209,13 +191,11 @@ class PDFToExcelApp(QWidget):
                 border-radius: 8px;
                 background-color: #F3F4F6;
             }
-
             QLabel {
                 font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; 
                 color: #1F2937;
                 background-color: transparent;
             }
-
             QSpinBox {
                 padding: 8px;
                 height: 40px;
@@ -226,7 +206,6 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid #D1D5DB;
                 border-radius: 4px;
             }
-
             QProgressBar {
                 margin-top: 8px;
                 margin-bottom: 8px;
@@ -239,13 +218,11 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
             }
-
             QProgressBar::chunk {
                 color: #ffffff;
                 background-color: #3B82F6;
                 border-radius: 6px;
             }
-
             QPushButton {
                 margin-top: 8px;
                 padding: 8px 16px;
@@ -256,7 +233,6 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid #1D4ED8;
                 border-radius: 6px;
             }
-
             QPushButton:hover {
                 background-color: #3B82F6;
             }
@@ -264,10 +240,7 @@ class PDFToExcelApp(QWidget):
 
     def show_message(self, title, message, icon=QMessageBox.Icon.Information):
         """
-        Display a message box with the given title, message, and optional icon.
-        :param title: Title of the message box.
-        :param message: Text content of the message box.
-        :param icon: The icon to display, default is Information.
+        Show a message box with a given title, message, and optional icon.
         """
         msg = QMessageBox(self)
         msg.setIcon(icon)
@@ -275,26 +248,24 @@ class PDFToExcelApp(QWidget):
         msg.setText(message)
         msg.exec()
 
-    def select_files(self):
+    def select_pdf_files(self):
         """
-        Open a file dialog to select PDF files.
-        Update the label with the number of selected files and enable the process button.
+        Prompt a file dialog to select PDF files; enable processing if any selected.
         """
         selected_files, _ = QFileDialog.getOpenFileNames(self, "Alegeți fișiere PDF", self.last_directory,
                                                          "PDF Files (*.pdf)")
         if selected_files:
-            self.files = selected_files
+            self.pdf_files = selected_files
             self.label.setText(f"{len(selected_files)} fișier(e) selectat(e)")
             self.process_button.setEnabled(True)
             self.last_directory = os.path.dirname(selected_files[0])
             save_last_directory(self.last_directory)
 
-    def process_files(self):
+    def start_file_processing(self):
         """
-        Start the background thread to process the selected PDFs.
-        Update UI elements to indicate the processing status.
+        Initialize the background thread for PDF processing and update the UI.
         """
-        if not self.files:
+        if not self.pdf_files:
             self.show_message("Eroare", "Vă rugăm să selectați fișiere PDF!", QMessageBox.Icon.Critical)
             return
 
@@ -303,26 +274,20 @@ class PDFToExcelApp(QWidget):
         self.progress_bar.setValue(0)
 
         percentage = self.percentage_input.value() / 100.0
-        self.processing_thread = ProcessingThread(self.files, percentage)
-
-        self.processing_thread.progress_signal.connect(self.on_progress_update)
-        self.processing_thread.finished.connect(self.on_processing_finished)
-
+        self.processing_thread = ProcessingThread(self.pdf_files, percentage)
+        self.processing_thread.progress_signal.connect(self.handle_progress_update)
+        self.processing_thread.finished.connect(self.handle_processing_finished)
         self.processing_thread.start()
 
-    def on_progress_update(self, value):
+    def handle_progress_update(self, value):
         """
-        Update the progress bar value based on the emitted progress signal.
-        :param value: An integer between 0 and 100 representing the current progress.
+        Update the progress bar with current progress value.
         """
         self.progress_bar.setValue(value)
 
-    def on_processing_finished(self, output_path):
+    def handle_processing_finished(self, output_path):
         """
-        Handle the finalization of the processing thread.
-        Prompt the user to save the resulting Excel file or display errors.
-        :param output_path: The final path of the generated Excel file,
-                            or empty string if an error occurred.
+        Handle finishing of processing. Allow user to save or show an error.
         """
         self.progress_bar.setValue(100)
         self.process_button.setEnabled(True)

@@ -3,6 +3,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Constants:
+    """
+    Application constants for Excel formatting, PDF layout, and config paths.
+    """
     __slots__ = ()
 
     COLUMN_FORMATS = {"nr_crt": "General", "company": "General", "invoice_number": "0", "nc8_code": "00 00 0000",
@@ -50,9 +53,7 @@ class Constants:
                    "section_5": (0.0, 0.93, 1.0, 1.0), }
 
     SCALING_FACTOR = 1.2
-
     CONFIG_FILE = "config.json"
-
     DEFAULT_CODE = 2093
 
     LOCATION_MAPPING = {"BUDESTI": 1759, "CATEASCA": 1826, "CRAIOVA": 1593, }

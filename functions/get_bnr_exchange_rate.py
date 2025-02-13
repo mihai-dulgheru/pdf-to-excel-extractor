@@ -13,7 +13,6 @@ def get_bnr_exchange_rate(expedition_date, currency="EUR"):
     max_attempts = 5
     for attempt in range(max_attempts):
         date_to_check = (expedition_date - timedelta(days=attempt)).strftime("%Y-%m-%d")
-        print(f"Fetching exchange rate for {currency} on {date_to_check}")
 
         try:
             ecb_api_url = "https://sdw-wsrest.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A"
@@ -28,10 +27,7 @@ def get_bnr_exchange_rate(expedition_date, currency="EUR"):
                     columns = line.split(",")
                     if columns[2] == currency:  # Column `CURRENCY`
                         exchange_rate = float(columns[7])  # Column `OBS_VALUE`
-                        print(f"[LOG] Exchange Rate: {exchange_rate}")
                         return exchange_rate
-
-                print(f"Exchange rate for {currency} not found on {date_to_check}")
             else:
                 print(f"[LOG] Error fetching exchange rate: {response.status_code} {response.reason}")
         except Exception as e:
