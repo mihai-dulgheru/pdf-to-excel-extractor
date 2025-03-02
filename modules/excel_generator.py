@@ -46,9 +46,11 @@ class ExcelGenerator:
         """
         self.data = self.data.sort_values(by=["vat_number", "shipment_date"]).reset_index(drop=True)
         self.data.insert(0, "nr_crt", self.data.groupby("vat_number").cumcount() + 1)
+
         self.data["percentage"] = self.percentage
-        self.data["transport"] = ""
-        self.data["statistic"] = ""
+        self.data["transport"] = self.data.get("transport", "")
+        self.data["statistic"] = self.data.get("statistic", "")
+
         self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
         self.data["invoice_number"] = self.data["invoice_number"].fillna(0)
 
