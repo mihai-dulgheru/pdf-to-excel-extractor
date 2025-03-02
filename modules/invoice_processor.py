@@ -7,7 +7,8 @@ import pandas as pd
 import pdfplumber
 
 from config import Constants
-from functions import calculate_coordinates, get_country_code_from_address, get_bnr_exchange_rate, get_delivery_location
+from functions import calculate_coordinates, get_country_code_from_address, get_bnr_exchange_rate, \
+    get_delivery_location, get_previous_workday
 
 
 class InvoiceProcessor:
@@ -82,7 +83,7 @@ class InvoiceProcessor:
 
             net_weight = InvoiceProcessor._extract_net_weight(pdf.pages[-1], is_invoice or is_credit_note, currency)
             shipment_date = InvoiceProcessor._extract_shipment_date(s1)
-            exchange_rate = get_bnr_exchange_rate(shipment_date, "RON")
+            exchange_rate = get_bnr_exchange_rate(get_previous_workday(shipment_date))
             delivery_location = get_delivery_location(s1)
             vat_number = InvoiceProcessor._extract_field(s3, r"Tax number\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
             delivery_condition = InvoiceProcessor._extract_field(s2, r"Incoterms\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
