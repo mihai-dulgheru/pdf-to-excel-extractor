@@ -65,21 +65,22 @@ class InvoiceProcessor:
             s3 = InvoiceProcessor._extract_section_text(first_page, "section_3", page_width, page_height)
             s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
 
+            is_invoice = "INVOICE" in s1.upper() and "ORIGINAL" not in s1.upper()
+            is_credit_note = "CREDIT NOTE" in s1.upper()
+
             company = InvoiceProcessor._extract_company(s2)
             invoice_number = InvoiceProcessor._extract_invoice_number(s1)
-            nc8_codes = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height)
+            nc8_codes = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note)
             origin = InvoiceProcessor._extract_origin(s4)
 
             destination_field = InvoiceProcessor._extract_field(s3, r"Invoiced to\s*:\s*(.+?)\nCredit transfer",
                                                                 "Unknown", re.DOTALL)
             destination = get_country_code_from_address(destination_field)
 
-            is_credit_note = "CREDIT NOTE" in s1.upper()
             invoice_value_eur, invoice_value_ron, currency = InvoiceProcessor._extract_invoice_values(pdf.pages[-1],
                                                                                                       page_width,
                                                                                                       page_height,
                                                                                                       is_credit_note)
-            is_invoice = "INVOICE" in s1.upper() and "ORIGINAL" not in s1.upper()
 
             net_weight = InvoiceProcessor._extract_net_weight(pdf.pages[-1], is_invoice or is_credit_note, currency)
             shipment_date = InvoiceProcessor._extract_shipment_date(s1)
@@ -136,11 +137,15 @@ class InvoiceProcessor:
         return lines[-1].split(" ")[0] if lines else "Unknown"
 
     @staticmethod
-    def _extract_nc8_codes(pdf, first_page, page_width, page_height):
+    def _extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note):
         """
         Extract NC8 codes from all pages.
+        If it's a credit note, return ["Credit Note"].
         If 'REFERENCE' and 'INTERNAL ORDER' in section_4_text, return that as a single code.
         """
+        if is_credit_note:
+            return ["Credit Note"]
+
         s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
         if s4 and "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
             return ["REFERENCE; INTERNAL ORDER"]
