@@ -31,77 +31,93 @@ class InvoiceProcessor:
         """
         Parse each PDF file in parallel, then aggregate results in self.df.
         """
-        total = len(self.input_paths)
-        results = []
-        processed = 0
+        try:
+            total = len(self.input_paths)
+            results = []
+            processed = 0
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_map = {executor.submit(self._process_single_invoice, path): path for path in self.input_paths}
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future_map = {executor.submit(self._process_single_invoice, path): path for path in self.input_paths}
 
-            for future in concurrent.futures.as_completed(future_map):
-                path = future_map[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    print(f"[LOG] Error processing {path}: {e}")
-                processed += 1
-                if self.progress_callback:
-                    self.progress_callback(processed, total)
+                for future in concurrent.futures.as_completed(future_map):
+                    path = future_map[future]
+                    try:
+                        result = future.result()
+                        results.append(result)
+                    except Exception as e:
+                        print(f"[LOG] Error processing {path}: {e}")
+                    processed += 1
+                    if self.progress_callback:
+                        self.progress_callback(processed, total)
 
-        self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
+            self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
+        except Exception as e:
+            print(f"[LOG] Error in process_invoices: {e}")
 
     @staticmethod
     def _process_single_invoice(pdf_path):
         """
         Process a single PDF file and return a dictionary of extracted fields.
         """
-        with pdfplumber.open(pdf_path) as pdf:
-            first_page = pdf.pages[0]
-            page_width, page_height = first_page.width, first_page.height
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                if len(pdf.pages) == 0:
+                    raise ValueError("PDF has no pages")
 
-            s1 = InvoiceProcessor._extract_section_text(first_page, "section_1", page_width, page_height)
-            s2 = InvoiceProcessor._extract_section_text(first_page, "section_2", page_width, page_height)
-            s3 = InvoiceProcessor._extract_section_text(first_page, "section_3", page_width, page_height)
-            s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
+                first_page = pdf.pages[0]
+                last_page = pdf.pages[-1] if len(pdf.pages) > 0 else first_page
+                page_width, page_height = first_page.width, first_page.height
 
-            is_invoice = "INVOICE" in s1.upper() and "ORIGINAL" not in s1.upper()
-            is_credit_note = "CREDIT NOTE" in s1.upper()
+                s1 = InvoiceProcessor._extract_section_text(first_page, "section_1", page_width, page_height)
+                s2 = InvoiceProcessor._extract_section_text(first_page, "section_2", page_width, page_height)
+                s3 = InvoiceProcessor._extract_section_text(first_page, "section_3", page_width, page_height)
+                s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
 
-            company = InvoiceProcessor._extract_company(s2)
-            invoice_number = InvoiceProcessor._extract_invoice_number(s1)
-            nc8_codes = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note)
-            origin = InvoiceProcessor._extract_origin(s4)
+                is_invoice = "INVOICE" in s1.upper() and "ORIGINAL" not in s1.upper() if s1 else False
+                is_credit_note = "CREDIT NOTE" in s1.upper() if s1 else False
 
-            destination_field = InvoiceProcessor._extract_field(s3, r"Invoiced to\s*:\s*(.+?)\nCredit transfer",
-                                                                "Unknown", re.DOTALL)
-            destination = get_country_code_from_address(destination_field)
+                company = InvoiceProcessor._extract_company(s2)
+                invoice_number = InvoiceProcessor._extract_invoice_number(s1)
+                nc8_codes = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height,
+                                                                is_credit_note)
+                origin = InvoiceProcessor._extract_origin(s4)
 
-            invoice_value_eur, invoice_value_ron, currency = InvoiceProcessor._extract_invoice_values(pdf.pages[-1],
-                                                                                                      page_width,
-                                                                                                      page_height,
-                                                                                                      is_credit_note)
+                destination_field = InvoiceProcessor._extract_field(s3, r"Invoiced to\s*:\s*(.+?)\nCredit transfer",
+                                                                    "Unknown", re.DOTALL)
+                destination = get_country_code_from_address(destination_field)
 
-            net_weight = InvoiceProcessor._extract_net_weight(pdf.pages[-1], is_invoice or is_credit_note, currency)
-            shipment_date = InvoiceProcessor._extract_shipment_date(s1)
-            exchange_rate = get_bnr_exchange_rate(get_previous_workday(shipment_date))
-            delivery_location = get_delivery_location(s1)
-            vat_number = InvoiceProcessor._extract_field(s3, r"Tax number\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
-            delivery_condition = InvoiceProcessor._extract_field(s2, r"Incoterms\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
+                invoice_value_eur, invoice_value_ron, currency = InvoiceProcessor._extract_invoice_values(last_page,
+                                                                                                          page_width,
+                                                                                                          page_height,
+                                                                                                          is_credit_note)
+                net_weight = InvoiceProcessor._extract_net_weight(last_page, is_invoice or is_credit_note, currency)
+                shipment_date = InvoiceProcessor._extract_shipment_date(s1)
+                exchange_rate = get_bnr_exchange_rate(get_previous_workday(shipment_date))
+                vat_number = InvoiceProcessor._extract_field(s3, r"Tax number\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
+                delivery_location = get_delivery_location(s1)
+                delivery_condition = InvoiceProcessor._extract_field(s2, r"Incoterms\s*:\s*(\w+)", "Unknown",
+                                                                     re.IGNORECASE)
 
-            return {"company": company, "invoice_number": invoice_number, "nc8_code": ", ".join(nc8_codes),
-                    "origin": origin, "destination": destination, "invoice_value_eur": invoice_value_eur,
-                    "net_weight": net_weight, "shipment_date": shipment_date.strftime("%d.%m.%Y"),
-                    "exchange_rate": exchange_rate, "value_ron": invoice_value_ron, "vat_number": vat_number,
-                    "delivery_location": delivery_location, "delivery_condition": delivery_condition}
+                return {"company": company, "invoice_number": invoice_number, "nc8_code": ", ".join(nc8_codes),
+                        "origin": origin, "destination": destination, "invoice_value_eur": invoice_value_eur,
+                        "net_weight": net_weight, "shipment_date": shipment_date.strftime("%d.%m.%Y"),
+                        "exchange_rate": exchange_rate, "value_ron": invoice_value_ron, "vat_number": vat_number,
+                        "delivery_location": delivery_location, "delivery_condition": delivery_condition}
+        except Exception as e:
+            print(f"[LOG] Error processing PDF {pdf_path}: {e}")
 
     @staticmethod
     def _extract_section_text(page, section_name, page_width, page_height):
         """
         Extract text from a predefined bounding box on the page.
         """
-        coords = calculate_coordinates(page_width, page_height, Constants.PROPORTIONS[section_name])
-        return page.within_bbox(coords).extract_text()
+        try:
+            coords = calculate_coordinates(page_width, page_height, Constants.PROPORTIONS[section_name])
+            text = page.within_bbox(coords).extract_text()
+            return text if text else ""
+        except Exception as e:
+            print(f"[LOG] Error extracting section {section_name}: {e}")
+            return ""
 
     @staticmethod
     def _extract_company(text):
@@ -133,8 +149,18 @@ class InvoiceProcessor:
         """
         if not section_1_text:
             return "Unknown"
+
         lines = section_1_text.split("\n")
-        return lines[-1].split(" ")[0] if lines else "Unknown"
+        if not lines:
+            return "Unknown"
+
+        try:
+            last_line = lines[-1]
+            parts = last_line.split(" ")
+            return parts[0] if parts else "Unknown"
+        except (IndexError, Exception) as e:
+            print(f"[LOG] Error extracting invoice number: {e}")
+            return "Unknown"
 
     @staticmethod
     def _extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note):
@@ -172,40 +198,50 @@ class InvoiceProcessor:
         """
         Extract invoice values (EUR, RON) and currency from the last page bounding box.
         """
-        box = (0.52, 0.88, 0.94, 0.94)
-        coords = calculate_coordinates(page_width, page_height, box)
-        text = last_page.within_bbox(coords).extract_text()
-        if not text:
-            return 0, 0, None
-
-        lines = [l.strip().replace('*', ' ') for l in text.splitlines() if any(cur in l for cur in ["EUR", "RON"])]
-        if len(lines) != 1:
-            return 0, 0, None
-
-        normalized_line = lines[0].replace(" ", "").replace(",", "").replace(".", "")
-        for currency in ["EUR", "RON"]:
-            if currency in normalized_line:
-                currency_str = currency.lower()
-                amount_str = normalized_line.split(currency, 1)[1]
-                break
-        else:
-            return 0, 0, None
-
         try:
-            amount = float(amount_str[:-2] + "." + amount_str[-2:]) if len(amount_str) > 2 else float(
-                "0." + amount_str.zfill(2))
-        except ValueError:
+            box = (0.52, 0.88, 0.94, 0.94)
+            coords = calculate_coordinates(page_width, page_height, box)
+            text = last_page.within_bbox(coords).extract_text()
+            if not text:
+                return 0, 0, None
+
+            lines = [l.strip().replace('*', ' ') for l in text.splitlines() if any(cur in l for cur in ["EUR", "RON"])]
+            if not lines:
+                return 0, 0, None
+
+            normalized_line = lines[0].replace(" ", "").replace(",", "").replace(".", "")
+            currency_str = None
+            amount_str = None
+
+            for currency in ["EUR", "RON"]:
+                if currency in normalized_line:
+                    currency_str = currency.lower()
+                    parts = normalized_line.split(currency, 1)
+                    if len(parts) > 1:
+                        amount_str = parts[1]
+                    break
+
+            if not currency_str or not amount_str:
+                return 0, 0, None
+
+            try:
+                amount = float(amount_str[:-2] + "." + amount_str[-2:]) if len(amount_str) > 2 else float(
+                    "0." + amount_str.zfill(2))
+            except (ValueError, IndexError):
+                return 0, 0, None
+
+            if is_credit_note:
+                amount = -amount
+
+            if currency_str == "eur":
+                return amount, 0, "EUR"
+            elif currency_str == "ron":
+                return 0, amount, "RON"
+
             return 0, 0, None
-
-        if is_credit_note:
-            amount = -amount
-
-        if currency_str == "eur":
-            return amount, 0, "EUR"
-        elif currency_str == "ron":
-            return 0, amount, "RON"
-
-        return 0, 0, None
+        except Exception as e:
+            print(f"[LOG] Error extracting invoice values: {e}")
+            return 0, 0, None
 
     @staticmethod
     def _extract_net_weight(last_page, is_invoice_or_credit_note, currency):
@@ -244,20 +280,28 @@ class InvoiceProcessor:
         """
         Extract shipment date (DD.MM.YYYY or DD.MM.YY) from section_1_text.
         """
-        if not section_1_text:
+        try:
+            if not section_1_text:
+                return datetime.now()
+
+            lines = section_1_text.split("\n")
+            if not lines:
+                return datetime.now()
+
+            last_line = lines[-1]
+            match = re.search(r"(\d{2}\.\d{2}\.\d{4}|\d{2}\.\d{2}\.\d{2})", last_line)
+            if match:
+                date_str = match.group(1)
+                try:
+                    if len(date_str) == 10:
+                        return datetime.strptime(date_str, "%d.%m.%Y")
+                    elif len(date_str) == 8:
+                        yr = int(date_str[-2:])
+                        yr += 2000 if yr < 50 else 1900
+                        return datetime.strptime(f"{date_str[:6]}{yr}", "%d.%m.%Y")
+                except ValueError:
+                    pass
             return datetime.now()
-        lines = section_1_text.split("\n")
-        last_line = lines[-1] if lines else ""
-        match = re.search(r"(\d{2}\.\d{2}\.\d{4}|\d{2}\.\d{2}\.\d{2})", last_line)
-        if match:
-            date_str = match.group(1)
-            try:
-                if len(date_str) == 10:
-                    return datetime.strptime(date_str, "%d.%m.%Y")
-                elif len(date_str) == 8:
-                    yr = int(date_str[-2:])
-                    yr += 2000 if yr < 50 else 1900
-                    return datetime.strptime(f"{date_str[:6]}{yr}", "%d.%m.%Y")
-            except ValueError:
-                pass
-        return datetime.now()
+        except Exception as e:
+            print(f"[LOG] Error extracting shipment date: {e}")
+            return datetime.now()
