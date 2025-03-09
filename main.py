@@ -12,7 +12,6 @@ def main():
     app.setApplicationVersion("1.0.0")
     app.setOrganizationName("PDF Extractor")
 
-    # Set the main window icon
     app_icon = QIcon("assets/icon.png")
     app.setWindowIcon(app_icon)
 

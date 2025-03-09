@@ -9,6 +9,7 @@ options = ["main.py",  # Main application file
            "--hidden-import=pdfplumber",  # Include pdfplumber for PDF processing
            "--hidden-import=PyQt6",  # Ensure PyQt6 is included
            "--hidden-import=requests",  # Include requests for HTTP requests
+           "--hidden-import=beautifulsoup4",  # Include BeautifulSoup for HTML parsing
            "--add-data=config;config",  # Include config directory
            "--add-data=functions;functions",  # Include functions directory
            "--add-data=modules;modules",  # Include modules directory

@@ -8,4 +8,5 @@ from .get_country_code_from_address import get_country_code_from_address
 from .get_delivery_location import get_delivery_location
 from .get_previous_workday import get_previous_workday
 from .merge_existing_with_new import merge_existing_with_new
+from .parse_mixed_number import parse_mixed_number
 from .round_to_n_decimals import round_to_n_decimals
