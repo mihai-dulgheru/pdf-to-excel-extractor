@@ -1,3 +1,5 @@
-/input/
-/output/
+/build
+/dist
+/input
+/output
 config.json
