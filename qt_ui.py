@@ -422,6 +422,10 @@ class PDFToExcelApp(QWidget):
                 border-radius: 6px;
             }}
             
+            QRadioButton, QCheckBox {{
+                background-color: {content_bg};
+            }}
+            
             QRadioButton::indicator, QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
@@ -446,12 +450,6 @@ class PDFToExcelApp(QWidget):
             QScrollArea {{
                 border: none;
                 background-color: transparent;
-            }}
-
-            #fileList {{
-                border: 1px solid {border_color};
-                border-radius: 4px;
-                background-color: {content_bg};
             }}
 
             QToolButton {{
