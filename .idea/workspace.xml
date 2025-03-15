@@ -4,7 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f4ab2ca8-b5af-4df7-946e-d709d3c621a0" name="Changes" comment="Update .gitignore, enhance error handling in main.py, and improve setup.py for executable generation" />
+    <list default="true" id="f4ab2ca8-b5af-4df7-946e-d709d3c621a0" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/invoice_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/invoice_processor.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -19,6 +22,13 @@
     &quot;assignee&quot;: &quot;mihai-dulgheru&quot;
   }
 }</component>
+  <component name="GithubProjectSettings">
+    <option name="branchProtectionPatterns">
+      <list>
+        <option value="master" />
+      </list>
+    </option>
+  </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/mihai-dulgheru/pdf-to-excel-extractor.git&quot;,
@@ -51,7 +61,7 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
-  <component name="RunManager" selected="Python.setup">
+  <component name="RunManager" selected="Python.sandbox">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="pdf-to-excel-extractor" />
       <option name="ENV_FILES" value="" />
@@ -123,9 +133,9 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.sandbox" />
         <item itemvalue="Python.setup" />
         <item itemvalue="Python.main" />
-        <item itemvalue="Python.sandbox" />
       </list>
     </recent_temporary>
   </component>
@@ -147,7 +157,8 @@
       <updated>1741468146641</updated>
       <workItem from="1741468148622" duration="8450000" />
       <workItem from="1741732093627" duration="76000" />
-      <workItem from="1741732196637" duration="3417000" />
+      <workItem from="1741732196637" duration="3683000" />
+      <workItem from="1742035542537" duration="3421000" />
     </task>
     <task id="LOCAL-00001" summary="Update .gitignore, enhance error handling in main.py, and improve setup.py for executable generation">
       <option name="closed" value="true" />
@@ -157,7 +168,15 @@
       <option name="project" value="LOCAL" />
       <updated>1741735245165</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Update workspace configuration and task management details">
+      <option name="closed" value="true" />
+      <created>1741736992867</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1741736992867</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -176,11 +195,12 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Update .gitignore, enhance error handling in main.py, and improve setup.py for executable generation" />
-    <option name="LAST_COMMIT_MESSAGE" value="Update .gitignore, enhance error handling in main.py, and improve setup.py for executable generation" />
+    <MESSAGE value="Update workspace configuration and task management details" />
+    <option name="LAST_COMMIT_MESSAGE" value="Update workspace configuration and task management details" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$main.coverage" NAME="main Coverage Results" MODIFIED="1741478785495" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$sandbox.coverage" NAME="sandbox Coverage Results" MODIFIED="1741478256695" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$sandbox.coverage" NAME="sandbox Coverage Results" MODIFIED="1742038857677" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$setup.coverage" NAME="setup Coverage Results" MODIFIED="1741732361010" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

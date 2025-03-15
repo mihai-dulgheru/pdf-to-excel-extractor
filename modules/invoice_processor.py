@@ -1,5 +1,4 @@
 import concurrent.futures
-import locale
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -74,8 +73,8 @@ class InvoiceProcessor:
                 s3 = InvoiceProcessor._extract_section_text(first_page, "section_3", page_width, page_height)
                 s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
 
-                is_invoice = "INVOICE" in s1.upper() and "ORIGINAL" not in s1.upper() if s1 else False
                 is_credit_note = "CREDIT NOTE" in s1.upper() if s1 else False
+                is_debit_note = "DEBIT NOTE" in s1.upper() if s1 else False
 
                 company = InvoiceProcessor._extract_company(s2)
                 invoice_number = InvoiceProcessor._extract_invoice_number(s1)
@@ -90,8 +89,11 @@ class InvoiceProcessor:
                                                                                                           page_width,
                                                                                                           page_height,
                                                                                                           is_credit_note)
-                total_net_weight = InvoiceProcessor._extract_net_weight(last_page, is_invoice or is_credit_note,
-                                                                        currency)
+
+                if nc8_data == [("REFERENCE; INTERNAL ORDER", 0)]:
+                    total_net_weight = 0
+                else:
+                    total_net_weight = InvoiceProcessor._extract_net_weight(last_page, is_credit_note or is_debit_note)
 
                 shipment_date = InvoiceProcessor._extract_shipment_date(s1)
                 exchange_rate = get_bnr_exchange_rate(get_previous_workday(shipment_date))
@@ -310,12 +312,7 @@ class InvoiceProcessor:
             if not currency_str or not amount_str:
                 return 0, 0, None
 
-            try:
-                amount = float(amount_str[:-2] + "." + amount_str[-2:]) if len(amount_str) > 2 else float(
-                    "0." + amount_str.zfill(2))
-            except (ValueError, IndexError):
-                return 0, 0, None
-
+            amount = parse_mixed_number(amount_str)
             if is_credit_note:
                 amount = -amount
 
@@ -330,36 +327,22 @@ class InvoiceProcessor:
             return 0, 0, None
 
     @staticmethod
-    def _extract_net_weight(last_page, is_invoice_or_credit_note, currency):
+    def _extract_net_weight(last_page, is_credit_or_debit_note):
         """
-        Extract net weight if not an invoice or credit note.
+        Extract net weight if not a credit or debit note.
         Returns the total net weight in kg.
         """
-        if is_invoice_or_credit_note:
+        if is_credit_or_debit_note:
             return 0
         text = last_page.extract_text()
         if not text:
             return 0
 
-        locale_code = "ro_RO.UTF-8" if currency == "RON" else "en_US.UTF-8"
-        try:
-            locale.setlocale(locale.LC_NUMERIC, locale_code)
-        except locale.Error:
-            print(f"[LOG] Locale {locale_code} not available, using default.")
-            try:
-                default_loc = locale.getdefaultlocale()[0]
-                locale.setlocale(locale.LC_NUMERIC, default_loc)
-            except (locale.Error, TypeError):
-                pass
-
         match = re.search(r"Net weight\s+([\d.,]+)\s+KG", text, re.IGNORECASE)
         if match:
             raw_val = match.group(1)
-            try:
-                num_val = locale.atof(raw_val)
-                return round(num_val)
-            except ValueError:
-                return 0
+            num_val = parse_mixed_number(raw_val)
+            return round(num_val)
         return 0
 
     @staticmethod
