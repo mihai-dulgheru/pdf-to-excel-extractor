@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 import pandas as pd
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QTimer
-from PyQt6.QtGui import QIcon, QFont, QPixmap
+from PyQt6.QtGui import QIcon, QFont, QPixmap, QCursor
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QProgressBar, QSpinBox,
                              QMessageBox, QScrollArea, QFrame, QAbstractSpinBox, QHBoxLayout, QRadioButton,
                              QButtonGroup, QGroupBox, QCheckBox, QToolButton)
@@ -199,13 +199,16 @@ class PDFToExcelApp(QWidget):
     def create_file_section(self):
         """Create the file selection section."""
         excel_group = QGroupBox("Fișier Excel")
+        excel_group.setObjectName("firstGroupBox")
         excel_layout = QVBoxLayout()
         excel_layout.setSpacing(8)
 
         excel_options_layout = QVBoxLayout()
         self.excel_options = QButtonGroup(self)
         self.create_new_excel = QRadioButton("Creează fișier Excel nou")
+        self.create_new_excel.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.append_to_excel = QRadioButton("Adaugă într-un fișier Excel existent")
+        self.append_to_excel.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.excel_options.addButton(self.create_new_excel)
         self.excel_options.addButton(self.append_to_excel)
         self.create_new_excel.setChecked(True)
@@ -237,10 +240,12 @@ class PDFToExcelApp(QWidget):
         self.select_pdf_button = QPushButton("  Selectează fișiere PDF")
         self.select_pdf_button.setIcon(QIcon("assets/icons/file-pdf-white.svg"))
         self.select_pdf_button.clicked.connect(self.select_pdf_files)
+        self.select_pdf_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.select_folder_button = QPushButton("  Selectează dosar cu fișiere PDF")
         self.select_folder_button.setIcon(QIcon("assets/icons/folder-open.svg"))
         self.select_folder_button.clicked.connect(self.select_pdf_folder)
+        self.select_folder_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         pdf_buttons_layout.addWidget(self.select_pdf_button)
         pdf_buttons_layout.addWidget(self.select_folder_button)
@@ -291,6 +296,7 @@ class PDFToExcelApp(QWidget):
 
         self.auto_open = QCheckBox("Deschide automat fișierul după procesare")
         self.auto_open.setChecked(False)
+        self.auto_open.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         options_layout.addWidget(self.auto_open)
 
         self.content_layout.addWidget(options_section)
@@ -375,7 +381,9 @@ class PDFToExcelApp(QWidget):
                 padding-top: 16px;
                 background-color: {content_bg};
             }}
-
+            QGroupBox#firstGroupBox {{
+                margin-top: 0;
+            }}
             QGroupBox::title {{
                 subcontrol-origin: margin;
                 left: 10px;
@@ -390,16 +398,14 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid {accent_color};
                 border-radius: 6px;
             }}
-
             QPushButton:hover {{
                 background-color: {accent_hover};
             }}
-
             QPushButton:disabled {{
                 background-color: {disabled_bg};
                 border: 1px solid {disabled_border};
             }}
-            
+
             QSpinBox, QComboBox {{
                 padding: 8px;
                 color: {text_color};
@@ -416,37 +422,31 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid {border_color};
                 border-radius: 6px;
             }}
-
             QProgressBar::chunk {{
                 background-color: {accent_color};
                 border-radius: 6px;
             }}
-            
+
             QRadioButton, QCheckBox {{
                 background-color: {content_bg};
             }}
-            
             QRadioButton::indicator, QCheckBox::indicator {{
                 width: 16px;
                 height: 16px;
             }}
-            
             QRadioButton::indicator:unchecked {{
                 image: url("assets/icons/circle.svg");
             }}
-            
             QRadioButton::indicator:checked {{
                 image: url("assets/icons/circle-dot.svg");
             }}
-            
             QCheckBox::indicator:unchecked {{
                 image: url("assets/icons/square.svg");
             }}
-            
             QCheckBox::indicator:checked {{
                 image: url("assets/icons/square-check.svg");
             }}
-            
+
             QScrollArea {{
                 border: none;
                 background-color: transparent;
@@ -457,9 +457,12 @@ class PDFToExcelApp(QWidget):
                 border-radius: 4px;
                 background-color: transparent;
             }}
-
             QToolButton:hover {{
                 background-color: {border_color};
+            }}
+            QToolButton:disabled {{
+                background-color: transparent;
+                opacity: 0.6;
             }}
         """)
 
@@ -498,7 +501,8 @@ class PDFToExcelApp(QWidget):
             remove_button = QToolButton()
             remove_button.setIcon(QIcon("assets/icons/trash-can.svg"))
             remove_button.setToolTip("Șterge fișierul")
-            remove_button.clicked.connect(lambda checked, path=pdf_file: self.remove_file(path))
+            remove_button.clicked.connect(lambda checked, path=pdf_file, btn=remove_button: self.remove_file(path, btn))
+            remove_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
             file_item_layout.addWidget(file_icon)
             file_item_layout.addWidget(file_name, 1)
@@ -506,22 +510,34 @@ class PDFToExcelApp(QWidget):
 
             self.file_list_layout.addWidget(file_item)
 
-    def remove_file(self, file_path):
-        """Remove a file from the list of selected PDF files."""
-        if file_path in self.pdf_files:
-            self.pdf_files.remove(file_path)
-            self.update_file_list()
-            self.pdf_count_label.setText(f"{len(self.pdf_files)} fișier(e) PDF selectat(e)")
-            self.update_process_button_state()
+    def remove_file(self, file_path, btn):
+        """
+        Remove a file from the list of selected PDF files.
+        Temporarily disable the button that triggered this action,
+        then re-enable it after the logic is complete.
+        """
+        btn.setEnabled(False)
 
-            self.status_message.setText(f"A fost șters fișierul: {os.path.basename(file_path)}")
-            QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
+        try:
+            if file_path in self.pdf_files:
+                self.pdf_files.remove(file_path)
+                self.update_file_list()
+                self.pdf_count_label.setText(f"{len(self.pdf_files)} fișier(e) PDF selectat(e)")
+                self.update_process_button_state()
+
+                self.status_message.setText(f"A fost șters fișierul: {os.path.basename(file_path)}")
+                QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
+        finally:
+            btn.setEnabled(True)
+            btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
     def toggle_excel_selection(self):
         """
         Enable or disable Excel file selection based on radio button state.
         """
         self.select_excel_button.setEnabled(self.append_to_excel.isChecked())
+        if self.select_excel_button.isEnabled():
+            self.select_excel_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         if self.create_new_excel.isChecked():
             self.excel_file = None
             self.excel_path_label.setText("Niciun fișier selectat")
@@ -592,6 +608,8 @@ class PDFToExcelApp(QWidget):
         excel_ok = self.create_new_excel.isChecked() or (
                 self.append_to_excel.isChecked() and self.excel_file is not None)
         self.process_button.setEnabled(has_pdfs and excel_ok)
+        if self.process_button.isEnabled():
+            self.process_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
     def start_file_processing(self):
         """
@@ -648,9 +666,17 @@ class PDFToExcelApp(QWidget):
         Handle finishing of processing. Allow user to save or show an error.
         """
         self.process_button.setEnabled(True)
+        self.process_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
         self.select_pdf_button.setEnabled(True)
+        self.select_pdf_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
         self.select_folder_button.setEnabled(True)
+        self.select_folder_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
         self.select_excel_button.setEnabled(self.append_to_excel.isChecked())
+        if self.select_excel_button.isEnabled():
+            self.select_excel_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.progress_bar.setValue(100)
 
