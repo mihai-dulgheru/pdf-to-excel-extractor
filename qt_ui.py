@@ -254,8 +254,6 @@ class PDFToExcelApp(QWidget):
 
         self.file_list_widget = QScrollArea()
         self.file_list_widget.setWidgetResizable(True)
-        self.file_list_widget.setMinimumHeight(120)
-        self.file_list_widget.setMaximumHeight(150)
 
         file_list_content = QFrame()
         self.file_list_layout = QVBoxLayout(file_list_content)
@@ -453,6 +451,7 @@ class PDFToExcelApp(QWidget):
             }}
 
             QToolButton {{
+                padding: 2px;
                 border: none;
                 border-radius: 4px;
                 background-color: transparent;
