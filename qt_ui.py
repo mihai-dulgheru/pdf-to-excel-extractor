@@ -334,7 +334,7 @@ class PDFToExcelApp(QWidget):
         status_layout.setContentsMargins(10, 0, 10, 0)
 
         self.status_message = QLabel("Gata")
-        version_label = QLabel("v1.0.0")
+        version_label = QLabel("v1.2.0")
 
         status_layout.addWidget(self.status_message, 1)
         status_layout.addWidget(version_label)
@@ -628,9 +628,11 @@ class PDFToExcelApp(QWidget):
 
         yes_button = msg_box.button(QMessageBox.StandardButton.Yes)
         yes_button.setText("Da")
+        yes_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         no_button = msg_box.button(QMessageBox.StandardButton.No)
         no_button.setText("Nu")
+        no_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         confirm = msg_box.exec()
 
@@ -717,9 +719,12 @@ class PDFToExcelApp(QWidget):
             success_message.setDefaultButton(QMessageBox.StandardButton.Save)
 
             save_button = success_message.button(QMessageBox.StandardButton.Save)
-            discard_button = success_message.button(QMessageBox.StandardButton.Discard)
             save_button.setText("Salvează")
+            save_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
+            discard_button = success_message.button(QMessageBox.StandardButton.Discard)
             discard_button.setText("Renunță")
+            discard_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
             result = success_message.exec()
 

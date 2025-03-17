@@ -198,7 +198,13 @@ class InvoiceProcessor:
         Extracts NC8 codes along with their corresponding values from the PDF.
         """
         if is_credit_note:
-            return [("Credit Note", 0)]
+            codes = []
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    codes += re.findall(r"Commodity Code\s*:\s*(\d+)", text)
+            unique_codes = list(dict.fromkeys(codes))
+            return [("; ".join(unique_codes), 0)] if unique_codes else [("Credit Note", 0)]
 
         s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
         if s4 and "REFERENCE" in s4 and "INTERNAL ORDER" in s4:

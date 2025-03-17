@@ -59,7 +59,7 @@ class ExcelGenerator:
         except ValueError:
             pass
 
-        self.data["nc8_code"] = self.data["nc8_code"].str.split(", ").str[0].apply(format_nc8_code)
+        self.data["nc8_code"] = self.data["nc8_code"].apply(format_nc8_code)
 
     def _add_totals(self, columns_to_total, group_by=None):
         """
