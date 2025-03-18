@@ -8,12 +8,11 @@ class Constants:
     """
     __slots__ = ()
 
-    COLUMN_FORMATS = {"nr_crt": "General", "company": "General", "invoice_number": "0", "nc8_code": "00 00 0000",
-                      "origin": "General", "destination": "General", "invoice_value_eur": "#,##0.00",
-                      "net_weight": "#,##0", "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000;-#,##0.0000",
-                      "value_ron": "#,##0;-#,##0", "vat_number": "General", "delivery_location": "0",
-                      "delivery_condition": "General", "percentage": "0.00", "transport": "#,##0.00",
-                      "statistic": "#,##0;-#,##0", }
+    COLUMN_FORMATS = {"nr_crt": "General", "company": "@", "invoice_number": "0", "nc8_code": "@", "origin": "@",
+                      "destination": "@", "invoice_value_eur": "#,##0.00", "net_weight": "#,##0",
+                      "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000", "value_ron": "#,##0.00",
+                      "vat_number": "@", "delivery_location": "General", "delivery_condition": "@",
+                      "percentage": "0.00", "transport": "#,##0.00", "statistic": "#,##0.00", }
 
     COLUMNS = ["company", "invoice_number", "nc8_code", "origin", "destination", "invoice_value_eur", "net_weight",
                "shipment_date", "exchange_rate", "value_ron", "vat_number", "delivery_location", "delivery_condition"]

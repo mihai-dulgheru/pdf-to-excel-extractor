@@ -291,28 +291,28 @@ class InvoiceProcessor:
     def _extract_invoice_values(last_page, page_width, page_height, is_credit_note):
         """
         Extract invoice values (EUR, RON) and currency from the last page bounding box.
+        Returns (value_eur, value_ron, "EUR"/"RON"/None).
         """
         try:
-            box = (0.52, 0.88, 0.94, 0.94)
-            coords = calculate_coordinates(page_width, page_height, box)
-            text = last_page.within_bbox(coords).extract_text()
+            coords = calculate_coordinates(page_width, page_height, (0.52, 0.88, 0.94, 0.94))
+            text = (last_page.within_bbox(coords).extract_text() or "").strip()
             if not text:
                 return 0, 0, None
 
-            lines = [l.strip().replace('*', ' ') for l in text.splitlines() if any(cur in l for cur in ["EUR", "RON"])]
+            lines = [line.strip().replace('*', ' ') for line in text.splitlines() if
+                     any(cur in line for cur in ("EUR", "RON"))]
             if not lines:
                 return 0, 0, None
 
-            normalized_line = lines[0].replace(" ", "").replace(",", "").replace(".", "")
-            currency_str = None
-            amount_str = None
+            normalized_line = lines[0].replace(" ", "")
 
-            for currency in ["EUR", "RON"]:
-                if currency in normalized_line:
-                    currency_str = currency.lower()
-                    parts = normalized_line.split(currency, 1)
-                    if len(parts) > 1:
-                        amount_str = parts[1]
+            currency_str = None
+            amount_str = ""
+
+            for c in ("EUR", "RON"):
+                if c in normalized_line:
+                    currency_str = c.lower()
+                    _, _, amount_str = normalized_line.partition(c)
                     break
 
             if not currency_str or not amount_str:
@@ -326,8 +326,9 @@ class InvoiceProcessor:
                 return amount, 0, "EUR"
             elif currency_str == "ron":
                 return 0, amount, "RON"
+            else:
+                return 0, 0, None
 
-            return 0, 0, None
         except Exception as e:
             print(f"[LOG] Error extracting invoice values: {e}")
             return 0, 0, None

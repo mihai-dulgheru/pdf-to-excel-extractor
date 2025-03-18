@@ -112,7 +112,6 @@ class ExcelGenerator:
             cell_value_ron = f"K{excel_row}"
             cell_percentage = f"O{excel_row}"
 
-            # Skip total/empty rows
             if pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == "":
                 continue
 
