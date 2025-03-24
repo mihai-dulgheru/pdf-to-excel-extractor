@@ -90,7 +90,7 @@ class InvoiceProcessor:
                                                                                                           page_height,
                                                                                                           is_credit_note)
 
-                if nc8_data == [("REFERENCE; INTERNAL ORDER", 0)]:
+                if nc8_data == [("INTERNAL ORDER", 0)]:
                     total_net_weight = 0
                 else:
                     total_net_weight = InvoiceProcessor._extract_net_weight(last_page, is_credit_note or is_debit_note)
@@ -208,7 +208,7 @@ class InvoiceProcessor:
 
         s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
         if s4 and "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
-            return [("REFERENCE; INTERNAL ORDER", 0)]
+            return [("INTERNAL ORDER", 0)]
 
         currency_pattern = re.compile(r"\b(EUR|RON)\b\s+([\d.,]+)\s+([\d.,]+)")
         specialized_pattern = re.compile(

@@ -8,6 +8,8 @@ class Constants:
     """
     __slots__ = ()
 
+    APPLICATION_VERSION = "1.2.0"
+
     COLUMN_FORMATS = {"nr_crt": "General", "company": "@", "invoice_number": "0", "nc8_code": "@", "origin": "@",
                       "destination": "@", "invoice_value_eur": "#,##0.00", "net_weight": "#,##0",
                       "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000", "value_ron": "#,##0.00",

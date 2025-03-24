@@ -334,7 +334,7 @@ class PDFToExcelApp(QWidget):
         status_layout.setContentsMargins(10, 0, 10, 0)
 
         self.status_message = QLabel("Gata")
-        version_label = QLabel("v1.2.0")
+        version_label = QLabel(f"v{Constants.APPLICATION_VERSION}")
 
         status_layout.addWidget(self.status_message, 1)
         status_layout.addWidget(version_label)

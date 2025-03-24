@@ -44,7 +44,7 @@ class ExcelGenerator:
         """
         Sort data, insert columns, and clean up for Excel output.
         """
-        self.data = self.data.sort_values(by=["vat_number", "shipment_date"]).reset_index(drop=True)
+        self.data = self.data.sort_values(by=["vat_number", "shipment_date", "invoice_number"]).reset_index(drop=True)
         self.data.insert(0, "nr_crt", self.data.groupby("vat_number").cumcount() + 1)
 
         self.data["percentage"] = self.percentage

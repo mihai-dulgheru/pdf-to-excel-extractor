@@ -4,7 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f4ab2ca8-b5af-4df7-946e-d709d3c621a0" name="Changes" comment="" />
+    <list default="true" id="f4ab2ca8-b5af-4df7-946e-d709d3c621a0" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/constants.py" beforeDir="false" afterPath="$PROJECT_DIR$/config/constants.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/excel_generator.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/excel_generator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/invoice_processor.py" beforeDir="false" afterPath="$PROJECT_DIR$/modules/invoice_processor.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/qt_ui.py" beforeDir="false" afterPath="$PROJECT_DIR$/qt_ui.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -59,7 +66,7 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
-  <component name="RunManager" selected="Python.main">
+  <component name="RunManager" selected="Python.sandbox">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="pdf-to-excel-extractor" />
       <option name="ENV_FILES" value="" />
@@ -108,16 +115,16 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.main" />
         <item itemvalue="Python.sandbox" />
+        <item itemvalue="Python.main" />
       </list>
     </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-PY-243.25659.43" />
-        <option value="bundled-python-sdk-181015f7ab06-4df51de95216-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.25659.43" />
+        <option value="bundled-js-predefined-d6986cc7102b-1632447f56bf-JavaScript-PY-243.26053.29" />
+        <option value="bundled-python-sdk-b1dbf8ef85a6-4df51de95216-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-243.26053.29" />
       </set>
     </attachedChunks>
   </component>
@@ -135,6 +142,8 @@
       <workItem from="1742035542537" duration="10355000" />
       <workItem from="1742232940465" duration="4061000" />
       <workItem from="1742317166548" duration="3492000" />
+      <workItem from="1742494312880" duration="1572000" />
+      <workItem from="1742840584718" duration="1848000" />
     </task>
     <task id="LOCAL-00001" summary="Update .gitignore, enhance error handling in main.py, and improve setup.py for executable generation">
       <option name="closed" value="true" />
@@ -200,7 +209,15 @@
       <option name="project" value="LOCAL" />
       <updated>1742320668795</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Update workspace.xml to streamline task management and adjust work item durations">
+      <option name="closed" value="true" />
+      <created>1742494407744</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1742494407744</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -226,11 +243,12 @@
     <MESSAGE value="Refactor UI components in qt_ui.py for better user interaction and update workspace.xml for task management improvements" />
     <MESSAGE value="Refactor NC8 code formatting in format_nc8_code.py and enhance invoice processing logic in invoice_processor.py; update version label in qt_ui.py" />
     <MESSAGE value="Update constants for invoice processing, enhance invoice value extraction logic, and increment application version to 1.2.0" />
-    <option name="LAST_COMMIT_MESSAGE" value="Update constants for invoice processing, enhance invoice value extraction logic, and increment application version to 1.2.0" />
+    <MESSAGE value="Update workspace.xml to streamline task management and adjust work item durations" />
+    <option name="LAST_COMMIT_MESSAGE" value="Update workspace.xml to streamline task management and adjust work item durations" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$main.coverage" NAME="main Coverage Results" MODIFIED="1742320388615" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$sandbox.coverage" NAME="sandbox Coverage Results" MODIFIED="1742320179433" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$sandbox.coverage" NAME="sandbox Coverage Results" MODIFIED="1742842884509" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$setup.coverage" NAME="setup Coverage Results" MODIFIED="1741732361010" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/pdf_to_excel_extractor$qt_ui.coverage" NAME="qt_ui Coverage Results" MODIFIED="1742244784636" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
