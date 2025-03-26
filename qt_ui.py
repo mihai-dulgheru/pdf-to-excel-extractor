@@ -83,7 +83,7 @@ class ProcessingThread(QThread):
         """
         Generate an Excel filename based on current month and year.
         """
-        return f"{datetime.now().strftime('%m-%Y')}-EXP.xlsx"
+        return f"{datetime.now().strftime('%d-%m-%Y')}-EXP.xlsx"
 
     def process_invoices(self):
         """
