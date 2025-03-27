@@ -114,11 +114,11 @@ class InvoiceProcessor:
                     results = []
                     for (nc8_code, partial_value), (_, proportional_weight) in zip(nc8_data, proportional_weights):
                         if currency == "EUR":
-                            invoice_value_eur_for_code = round(partial_value, 2)
-                            invoice_value_ron_for_code = round(partial_value * exchange_rate, 2)
+                            invoice_value_eur_for_code = partial_value
+                            invoice_value_ron_for_code = partial_value * exchange_rate
                         elif currency == "RON":
-                            invoice_value_ron_for_code = round(partial_value, 2)
-                            invoice_value_eur_for_code = round(partial_value / exchange_rate, 2) if exchange_rate else 0
+                            invoice_value_ron_for_code = partial_value
+                            invoice_value_eur_for_code = partial_value / exchange_rate if exchange_rate else 0
                         else:
                             invoice_value_eur_for_code = 0
                             invoice_value_ron_for_code = 0
@@ -210,15 +210,15 @@ class InvoiceProcessor:
         if s4 and "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
             return [("INTERNAL ORDER", 0)]
 
-        currency_pattern = re.compile(r"\b(EUR|RON)\b\s+([\d.,]+)\s+([\d.,]+)")
+        currency_pattern = re.compile(r"\b(EUR|RON)\b[\s\r\n]+([\d.,]+)[\s\r\n]+([\d.,]+)", re.IGNORECASE)
         specialized_pattern = re.compile(
             r"^[A-Za-z0-9]+\s+PER\s+(?:\d{1,3}(?:[.,]\d{3})+|\d+)\s+PC\s+\d+PC\s+([\d.,]+)\s+([\d.,]+)$")
         code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)")
 
         lines_all = []
-        for page in pdf.pages:
-            text = page.extract_text() or ""
-            page_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        for page_obj in pdf.pages:
+            txt = page_obj.extract_text() or ""
+            page_lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
             lines_all.extend(page_lines)
 
         pairs = []
@@ -228,7 +228,11 @@ class InvoiceProcessor:
         while i < len(lines_all):
             line = lines_all[i]
 
-            currency_match = currency_pattern.search(line)
+            line_join = line
+            if i + 1 < len(lines_all):
+                line_join += " " + lines_all[i + 1]
+
+            currency_match = currency_pattern.search(line_join)
             if currency_match:
                 raw_val = currency_match.group(2)
                 current_value = parse_mixed_number(raw_val)

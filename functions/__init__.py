@@ -10,3 +10,4 @@ from .get_previous_workday import get_previous_workday
 from .merge_existing_with_new import merge_existing_with_new
 from .parse_mixed_number import parse_mixed_number
 from .round_to_n_decimals import round_to_n_decimals
+from .show_progress_bar import show_progress_bar

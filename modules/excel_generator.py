@@ -38,27 +38,18 @@ class ExcelGenerator:
         self._write_rows(ws)
 
         wb.save(path)
-        print(f"[LOG] Excel file saved to {path}")
 
     def _prepare_data(self):
         """
-        Sort data, insert columns, and clean up for Excel output.
+        Sort, clean, and prepare data for Excel output.
         """
+        self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
+        self.data["invoice_number"] = pd.to_numeric(self.data["invoice_number"], errors="coerce").fillna(0).astype(int)
         self.data = self.data.sort_values(by=["vat_number", "shipment_date", "invoice_number"]).reset_index(drop=True)
         self.data.insert(0, "nr_crt", self.data.groupby("vat_number").cumcount() + 1)
-
         self.data["percentage"] = self.percentage
         self.data["transport"] = self.data.get("transport", "")
         self.data["statistic"] = self.data.get("statistic", "")
-
-        self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
-        self.data["invoice_number"] = self.data["invoice_number"].fillna(0)
-
-        try:
-            self.data["invoice_number"] = self.data["invoice_number"].astype(int)
-        except ValueError:
-            pass
-
         self.data["nc8_code"] = self.data["nc8_code"].apply(format_nc8_code)
 
     def _add_totals(self, columns_to_total, group_by=None):
@@ -107,19 +98,25 @@ class ExcelGenerator:
         for i, row in self.data.iterrows():
             excel_row = i + 2
             cell_exchange_rate = f"J{excel_row}"
-            cell_net_weight = f"H{excel_row}"
             cell_value_eur = f"G{excel_row}"
             cell_value_ron = f"K{excel_row}"
+            cell_net_weight = f"H{excel_row}"
             cell_percentage = f"O{excel_row}"
 
             if pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == "":
                 continue
 
-            if row["value_ron"] == 0:
-                self.data.at[i, "value_ron"] = f"={cell_value_eur}*{cell_exchange_rate}"
+            val_eur = row["invoice_value_eur"]
+            val_ron = row["value_ron"]
 
-            if row["invoice_value_eur"] == 0:
+            if val_eur == 0 and val_ron == 0:
+                self.data.at[i, "value_ron"] = f"={cell_value_eur}*{cell_exchange_rate}"
+            elif val_eur != 0 and val_ron != 0:
+                self.data.at[i, "value_ron"] = f"={cell_value_eur}*{cell_exchange_rate}"
+            elif val_eur == 0 and val_ron != 0:
                 self.data.at[i, "invoice_value_eur"] = f"={cell_value_ron}/{cell_exchange_rate}"
+            elif val_eur != 0 and val_ron == 0:
+                self.data.at[i, "value_ron"] = f"={cell_value_eur}*{cell_exchange_rate}"
 
             if pd.notna(row["net_weight"]) and pd.notna(row["exchange_rate"]):
                 self.data.at[i, "transport"] = f"=28000*{cell_exchange_rate}/147000*{cell_net_weight}"
