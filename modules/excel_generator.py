@@ -102,6 +102,7 @@ class ExcelGenerator:
             cell_value_ron = f"K{excel_row}"
             cell_net_weight = f"H{excel_row}"
             cell_percentage = f"O{excel_row}"
+            cell_transport = f"P{excel_row}"
 
             if pd.isna(row["nr_crt"]) or str(row["nr_crt"]).strip() == "":
                 continue
@@ -124,7 +125,7 @@ class ExcelGenerator:
                 self.data.at[i, "transport"] = ""
 
             if pd.notna(row["value_ron"]):
-                self.data.at[i, "statistic"] = f"=ROUND({cell_value_ron}+{cell_percentage}*{cell_exchange_rate}, 0)"
+                self.data.at[i, "statistic"] = f"=ROUND({cell_value_ron}+{cell_percentage}*{cell_transport}, 0)"
             else:
                 self.data.at[i, "statistic"] = ""
 
