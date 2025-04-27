@@ -105,7 +105,7 @@ Key features of the build:
 - Multi-file distribution for better performance and easier updates
 - Optimized code with level 2 optimization
 - No console window (runs in windowed mode only)
-- UPX compression enabled for smaller file size
+- UPX compression is enabled for a smaller file size
 - Stripped binaries for reduced size
 
 ## Usage
@@ -176,7 +176,7 @@ The standalone executable:
 
 - Runs on Windows 10/11 without Python installation
 - Includes all required dependencies
-- Maintains organized input/output directory structure
+- Maintains an organized input / output directory structure
 - Preserves full functionality of the source version
 - No additional installation or configuration needed
 
