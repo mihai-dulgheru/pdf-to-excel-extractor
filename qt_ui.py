@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
                              QButtonGroup, QGroupBox, QCheckBox, QToolButton)
 
 from config import Constants
-from functions import merge_existing_with_new
 from modules.excel_generator import ExcelGenerator
 from modules.invoice_processor import InvoiceProcessor
 
@@ -57,7 +56,7 @@ class ProcessingThread(QThread):
         """
         :param pdf_files: List of PDF file paths to process.
         :param percentage: Float percentage for calculations.
-        :param existing_excel: Path to existing Excel file to append to, or None.
+        :param existing_excel: Path to the existing Excel file to append to, or None.
         """
         super().__init__()
         self.pdf_files = pdf_files
@@ -81,7 +80,7 @@ class ProcessingThread(QThread):
     @staticmethod
     def generate_excel_filename():
         """
-        Generate an Excel filename based on current month and year.
+        Generate an Excel filename based on the current month and year.
         """
         return f"{datetime.now().strftime('%d-%m-%Y')}-EXP.xlsx"
 
@@ -96,13 +95,10 @@ class ProcessingThread(QThread):
                 processor = InvoiceProcessor(temp_paths, progress_callback=self._progress_callback)
                 processor.process_invoices()
 
-                if self.existing_excel and os.path.exists(self.existing_excel):
-                    processor.df = merge_existing_with_new(self.existing_excel, processor.df)
-
                 excel_filename = self.generate_excel_filename()
                 temp_excel_path = os.path.join(temp_dir, excel_filename)
                 generator = ExcelGenerator(processor.df, self.percentage)
-                generator.generate_excel(temp_excel_path)
+                generator.generate_excel(temp_excel_path, self.existing_excel)
 
                 final_path = os.path.join(os.getcwd(), excel_filename)
                 shutil.move(temp_excel_path, final_path)
@@ -121,7 +117,7 @@ class ProcessingThread(QThread):
 
     def run(self):
         """
-        Run the invoice processing; emit 'finished' with output path.
+        Run the invoice processing; emit 'finished' with the output path and DataFrame.
         """
         try:
             output_path, df = self.process_invoices()
@@ -131,7 +127,7 @@ class ProcessingThread(QThread):
             self.finished.emit("", pd.DataFrame())
 
 
-# noinspection PyUnresolvedReferences
+# noinspection PyUnresolvedReferences,SpellCheckingInspection
 class PDFToExcelApp(QWidget):
     """
     Main window for selecting and processing PDF invoices into Excel.
@@ -300,7 +296,7 @@ class PDFToExcelApp(QWidget):
         self.content_layout.addWidget(options_section)
 
     def create_action_section(self):
-        """Create the action section with process button and progress indicators."""
+        """Create the action section with a process button and progress indicators."""
         action_section = QGroupBox("Procesează")
         action_layout = QVBoxLayout(action_section)
         action_layout.setSpacing(10)
@@ -532,7 +528,7 @@ class PDFToExcelApp(QWidget):
 
     def toggle_excel_selection(self):
         """
-        Enable or disable Excel file selection based on radio button state.
+        Enable or disable Excel file selection based on the radio button state.
         """
         self.select_excel_button.setEnabled(self.append_to_excel.isChecked())
         if self.select_excel_button.isEnabled():
@@ -542,7 +538,7 @@ class PDFToExcelApp(QWidget):
             self.excel_path_label.setText("Niciun fișier selectat")
         self.update_process_button_state()
 
-    def show_message(self, title, message, icon=QMessageBox.Icon.Information):
+    def show_message(self, title, message, icon: QMessageBox.Icon = QMessageBox.Icon.Information):
         """
         Show a message box with a given title, message, and optional icon.
         """
@@ -658,106 +654,103 @@ class PDFToExcelApp(QWidget):
 
     def handle_progress_update(self, value):
         """
-        Update the progress bar with current progress value.
+        Update the progress bar with the current progress value.
         """
         self.progress_bar.setValue(value)
 
     def handle_processing_finished(self, output_path, df):
         """
-        Handle finishing of processing. Allow user to save or show an error.
+        Handle finishing of processing: re-enable controls, update status,
+        show success dialog (with Save/Discard), and handle saving or cleanup.
         """
-        self.process_button.setEnabled(True)
-        self.process_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        for btn in (self.process_button, self.select_pdf_button, self.select_folder_button):
+            btn.setEnabled(True)
+            btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
-        self.select_pdf_button.setEnabled(True)
-        self.select_pdf_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-
-        self.select_folder_button.setEnabled(True)
-        self.select_folder_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-
-        self.select_excel_button.setEnabled(self.append_to_excel.isChecked())
-        if self.select_excel_button.isEnabled():
+        excel_enabled = self.append_to_excel.isChecked()
+        self.select_excel_button.setEnabled(excel_enabled)
+        if excel_enabled:
             self.select_excel_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.progress_bar.setValue(100)
 
-        if output_path and os.path.exists(output_path):
-            num_entries = len(df)
-
-            if self.append_to_excel.isChecked() and self.excel_file:
-                try:
-                    existing_df = pd.read_excel(self.excel_file)
-
-                    if 'Nr Crt' in existing_df.columns:
-                        existing_df = existing_df[existing_df['Nr Crt'].apply(lambda x: pd.notna(x) and (
-                                isinstance(x, (int, float)) or (isinstance(x, str) and x.isdigit())))]
-
-                    num_existing = len(existing_df)
-                    num_new = num_entries - num_existing
-
-                    if num_new > 0:
-                        self.status_label.setText(
-                            f"Procesare finalizată cu succes! Au fost adăugate {num_new} înregistrări noi. "
-                            f"Total: {num_entries} înregistrări.")
-                    else:
-                        self.status_label.setText(
-                            f"Procesare finalizată! Nicio înregistrare nouă. Total: {num_entries} înregistrări.")
-                except Exception as e:
-                    print(f"[LOG] Error calculating new entries: {e}")
-                    self.status_label.setText(f"Procesare finalizată cu succes! {num_entries} înregistrări totale.")
-            else:
-                self.status_label.setText(f"Procesare finalizată cu succes! {num_entries} înregistrări.")
-
-            success_message = QMessageBox(self)
-            success_message.setIcon(QMessageBox.Icon.Information)
-            success_message.setWindowTitle("Procesare finalizată cu succes")
-            success_message.setText("PDF-urile au fost procesate cu succes!")
-            success_message.setInformativeText(
-                f"Au fost procesate {len(self.pdf_files)} fișiere PDF.\nAu fost extrase {num_entries} înregistrări.")
-
-            success_message.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard)
-            success_message.setDefaultButton(QMessageBox.StandardButton.Save)
-
-            save_button = success_message.button(QMessageBox.StandardButton.Save)
-            save_button.setText("Salvează")
-            save_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-
-            discard_button = success_message.button(QMessageBox.StandardButton.Discard)
-            discard_button.setText("Renunță")
-            discard_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-
-            result = success_message.exec()
-
-            if result == QMessageBox.StandardButton.Save:
-                default_save_path = os.path.join(self.last_directory, os.path.basename(output_path))
-                save_path, _ = QFileDialog.getSaveFileName(self, "Salvează fișierul Excel generat", default_save_path,
-                                                           "Excel Files (*.xlsx)")
-
-                if save_path:
-                    try:
-                        shutil.move(output_path, save_path)
-                        self.status_label.setText(f"Fișierul Excel a fost salvat cu succes la: {save_path}")
-                        self.status_message.setText("Fișier salvat cu succes")
-                        self.last_directory = os.path.dirname(save_path)
-                        save_last_directory(self.last_directory)
-
-                        if self.auto_open.isChecked():
-                            os.startfile(save_path)
-                    except Exception as e:
-                        print(f"[LOG] Error saving file: {e}")
-                        self.show_message("Eroare la salvare", f"Eroare la salvarea fișierului: {str(e)}",
-                                          QMessageBox.Icon.Critical)
-                else:
-                    os.remove(output_path)
-                    self.status_label.setText("Salvarea fișierului Excel a fost anulată.")
-                    self.status_message.setText("Salvare anulată")
-            else:
-                os.remove(output_path)
-                self.status_label.setText("Fișierul Excel a fost șters.")
-                self.status_message.setText("Fișier șters")
-        else:
+        if not output_path or not os.path.exists(output_path):
             self.status_label.setText("Procesare eșuată. Verifică fișierele PDF și încearcă din nou.")
             self.status_message.setText("Procesare eșuată")
             self.show_message("Eroare de procesare",
                               "Nu s-au putut procesa fișierele PDF. Verifică validitatea fișierelor și încearcă din nou.",
                               QMessageBox.Icon.Critical)
+            return
+
+        num_new = len(df)
+        if excel_enabled and self.excel_file:
+            num_before = self._count_existing_records()
+            total = num_before + num_new
+            if num_new > 0:
+                text = (f"Procesare finalizată cu succes! "
+                        f"Au fost adăugate {num_new} înregistrări noi. Total: {total} înregistrări.")
+            else:
+                text = f"Procesare finalizată! Nicio înregistrare nouă. Total: {total} înregistrări."
+        else:
+            text = f"Procesare finalizată cu succes! {num_new} înregistrări."
+        self.status_label.setText(text)
+
+        dlg = QMessageBox(self)
+        dlg.setIcon(QMessageBox.Icon.Information)
+        dlg.setWindowTitle("Procesare finalizată cu succes")
+        dlg.setText("PDF-urile au fost procesate cu succes!")
+        dlg.setInformativeText(f"Au fost procesate {len(self.pdf_files)} fișiere PDF.\n"
+                               f"Au fost extrase {num_new} înregistrări.")
+        dlg.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard)
+        dlg.setDefaultButton(QMessageBox.StandardButton.Save)
+
+        for role, text in ((QMessageBox.StandardButton.Save, "Salvează"),
+                           (QMessageBox.StandardButton.Discard, "Renunță"),):
+            btn = dlg.button(role)
+            btn.setText(text)
+            btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
+        if dlg.exec() == QMessageBox.StandardButton.Save:
+            self._save_output(output_path)
+        else:
+            os.remove(output_path)
+            self.status_label.setText("Fișierul Excel a fost șters.")
+            self.status_message.setText("Fișier șters")
+
+    def _count_existing_records(self):
+        """
+        Read the selected Excel and return the number of valid existing rows.
+        """
+        try:
+            df = pd.read_excel(self.excel_file, dtype=str)
+            col = Constants.HEADERS["nr_crt"]
+            if col in df.columns:
+                df = df[df[col].notna()]
+            return len(df)
+        except Exception as e:
+            print(f"[LOG] Error counting existing records: {e}")
+            return 0
+
+    def _save_output(self, output_path):
+        """
+        Handle the Save path dialog and actual move (and auto-open).
+        """
+        default = os.path.join(self.last_directory, os.path.basename(output_path))
+        save_path, _ = QFileDialog.getSaveFileName(self, "Salvează fișierul Excel generat", default,
+                                                   "Excel Files (*.xlsx)")
+        if not save_path:
+            os.remove(output_path)
+            self.status_label.setText("Salvarea fișierului Excel a fost anulată.")
+            self.status_message.setText("Salvare anulată")
+            return
+        try:
+            shutil.move(output_path, save_path)
+            self.status_label.setText(f"Fișierul Excel a fost salvat cu succes la: {save_path}")
+            self.status_message.setText("Fișier salvat cu succes")
+            self.last_directory = os.path.dirname(save_path)
+            save_last_directory(self.last_directory)
+            if self.auto_open.isChecked():
+                os.startfile(save_path)
+        except Exception as e:
+            print(f"[LOG] Error saving file: {e}")
+            self.show_message("Eroare la salvare", f"Eroare la salvarea fișierului: {e}", QMessageBox.Icon.Critical)
