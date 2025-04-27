@@ -29,7 +29,7 @@ class InvoiceProcessor:
 
     def process_invoices(self):
         """
-        Parse each PDF file in parallel, then aggregate results in self.df.
+        Parse each PDF file in parallel, then aggregate it results in self.df.
         """
         try:
             total = len(self.input_paths)
@@ -165,7 +165,7 @@ class InvoiceProcessor:
     @staticmethod
     def _extract_field(text, pattern, default, flags=0):
         """
-        Extract a single value from text using a regex pattern.
+        Extract a single value from a text using a regex pattern.
         """
         if not text:
             return default
@@ -195,80 +195,62 @@ class InvoiceProcessor:
     @staticmethod
     def _extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note):
         """
-        Extracts NC8 codes along with their corresponding values from the PDF.
+        Extract NC-8 codes together with the corresponding value for each code.
         """
         if is_credit_note:
-            codes = []
-            for page in pdf.pages:
-                text = page.extract_text()
-                if text:
-                    codes += re.findall(r"Commodity Code\s*:\s*(\d+)", text)
-            unique_codes = list(dict.fromkeys(codes))
-            return [("; ".join(unique_codes), 0)] if unique_codes else [("Credit Note", 0)]
+            codes = [m.group(1) for page in pdf.pages if (txt := page.extract_text()) for m in
+                     re.finditer(r"Commodity Code\s*:\s*(\d+)", txt)]
+            return [("; ".join(dict.fromkeys(codes)), 0)] if codes else [("Credit Note", 0)]
 
         s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
-        if s4 and "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
+        if "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
             return [("INTERNAL ORDER", 0)]
 
         currency_pattern = re.compile(r"\b(EUR|RON)\b[\s\r\n]+([\d.,]+)[\s\r\n]+([\d.,]+)", re.IGNORECASE)
         specialized_pattern = re.compile(
             r"^[A-Za-z0-9]+\s+PER\s+(?:\d{1,3}(?:[.,]\d{3})+|\d+)\s+PC\s+\d+PC\s+([\d.,]+)\s+([\d.,]+)$")
-        code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)")
+        code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)", re.IGNORECASE)
+        purch_pattern = re.compile(r"purch\. order no\.", re.IGNORECASE)
+        origin_pattern = re.compile(r"country of origin", re.IGNORECASE)
 
-        lines_all = []
-        for page_obj in pdf.pages:
-            txt = page_obj.extract_text() or ""
-            page_lines = [ln.strip() for ln in txt.splitlines() if ln.strip()]
-            lines_all.extend(page_lines)
+        lines = [ln.strip() for page in pdf.pages for ln in (page.extract_text() or "").splitlines() if ln.strip()]
 
-        pairs = []
-        current_value = None
-        i = 0
+        pairs, current_val = [], None
+        i, n = 0, len(lines)
 
-        while i < len(lines_all):
-            line = lines_all[i]
+        while i < n:
+            line = lines[i]
+            joined = f"{line} {lines[i + 1]}" if i + 1 < n else line  # capture split currency lines
 
-            line_join = line
-            if i + 1 < len(lines_all):
-                line_join += " " + lines_all[i + 1]
-
-            currency_match = currency_pattern.search(line_join)
-            if currency_match:
-                raw_val = currency_match.group(2)
-                current_value = parse_mixed_number(raw_val)
+            if m := currency_pattern.search(joined):
+                current_val = parse_mixed_number(m.group(2))
                 i += 1
                 continue
 
-            sp_match = specialized_pattern.match(line)
-            if sp_match and (i + 4) < len(lines_all):
-                line_purch = lines_all[i + 2]
-                line_code = lines_all[i + 3]
-                line_country = lines_all[i + 4]
+            if m := specialized_pattern.match(line):
+                current_val = parse_mixed_number(m.group(2))
 
-                cmatch = code_pattern.search(line_code)
+                purch_seen = origin_seen = False
+                nc8_code = None
+                for j in range(i + 1, min(i + 12, n)):
+                    l = lines[j]
+                    purch_seen |= bool(purch_pattern.search(l))
+                    origin_seen |= bool(origin_pattern.search(l))
+                    if not nc8_code and (cm := code_pattern.search(l)):
+                        nc8_code = cm.group(1)
 
-                if (line_purch.lower().startswith("purch. order no.") and cmatch and line_country.lower().startswith(
-                        "country of origin")):
-                    raw_main_val = sp_match.group(2)
-                    current_value = parse_mixed_number(raw_main_val)
-
-                    nc8_code = cmatch.group(1)
-                    pairs.append((nc8_code, current_value))
-
-                    current_value = None
-                    i += 5
-                    continue
-
-            cmatch = code_pattern.search(line)
-            if cmatch:
-                nc8_code = cmatch.group(1)
-                if current_value is not None:
-                    pairs.append((nc8_code, current_value))
-                    current_value = None
+                    if purch_seen and origin_seen and nc8_code:
+                        pairs.append((nc8_code, current_val))
+                        current_val = None
+                        i = j
+                        break
                 else:
-                    pairs.append((nc8_code, 0.0))
-                i += 1
-                continue
+                    pass
+
+            elif cm := code_pattern.search(line):
+                code = cm.group(1)
+                pairs.append((code, current_val if current_val is not None else 0.0))
+                current_val = None
 
             i += 1
 
@@ -279,7 +261,7 @@ class InvoiceProcessor:
         for code, val in pairs:
             merged[code] += val
 
-        return [(cd, total_val) for cd, total_val in merged.items()]
+        return [(c, v) for c, v in merged.items()]
 
     @staticmethod
     def _extract_origin(section_4_text):
@@ -374,7 +356,7 @@ class InvoiceProcessor:
     @staticmethod
     def _extract_shipment_date(section_1_text):
         """
-        Extract shipment date (DD.MM.YYYY or DD.MM.YY) from section_1_text.
+        Extract the shipment date (DD.MM.YYYY or DD.MM.YY) from section_1_text.
         """
         try:
             if not section_1_text:
