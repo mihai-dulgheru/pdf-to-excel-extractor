@@ -1,5 +1,5 @@
-import bisect
 import os
+from datetime import datetime, date
 
 import openpyxl
 import pandas as pd
@@ -36,8 +36,8 @@ class ExcelGenerator:
             self._append_new_invoices_to_workbook(existing_excel, path)
             return
 
-        self._add_excel_formulas()
         self._add_totals(["net_weight", "value_ron", "statistic"], group_by="vat_number")
+        self._add_excel_formulas()
 
         wb = Workbook()
         ws = wb.active
@@ -51,6 +51,7 @@ class ExcelGenerator:
         """
         Sort, clean, and prepare data for Excel output.
         """
+        self.data["vat_number"] = self.data["vat_number"].astype(str)
         self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
         self.data["invoice_number"] = pd.to_numeric(self.data["invoice_number"], errors="coerce").fillna(0).astype(int)
         self.data = self.data.sort_values(by=["vat_number", "shipment_date", "invoice_number"]).reset_index(drop=True)
@@ -76,13 +77,9 @@ class ExcelGenerator:
         struct = self._find_data_block(ws, header_map)
         existing = self._collect_existing_keys(ws, struct, header_map)
 
-        df = (self.data.assign(invoice_number=lambda x: pd.to_numeric(x.invoice_number, errors='coerce')).dropna(
-            subset=['invoice_number']).assign(invoice_number=lambda x: x.invoice_number.astype(int),
-                                              vat_number=lambda x: x.vat_number.astype(str),
-                                              nc8_code=lambda x: x.nc8_code.astype(str)))
-
-        new_records = [r for _, r in df.iterrows() if (r.vat_number, r.invoice_number, r.nc8_code) not in existing]
-        new_records.sort(key=lambda r: (r.vat_number, r.shipment_date, r.invoice_number))
+        df = self.data.dropna(subset=['invoice_number'])
+        new_records = [row for _, row in df.iterrows() if
+                       (row.vat_number, row.invoice_number, row.nc8_code) not in existing]
 
         initial_vats = set(struct['vat_groups'])
         new_vats = {}
@@ -132,9 +129,6 @@ class ExcelGenerator:
         """
         Add in-cell formulas for computed columns (value_ron, invoice_value_eur, transport, statistic).
         """
-        formula_cols = ["value_ron", "invoice_value_eur", "transport", "statistic"]
-        self.data = self.data.astype({col: object for col in formula_cols})
-
         for i, row in self.data.iterrows():
             excel_row = i + 2
             formulas = self._build_formulas_for_row(excel_row, row.to_dict())
@@ -268,12 +262,42 @@ class ExcelGenerator:
         grp = struct['vat_groups'].get(rec.vat_number)
         if not grp or not grp.get('end'):
             return struct['data_end'] + 1
+
         start, end = grp['start'], grp['end']
-        rows = list(range(start, end))
-        pairs = [(ws.cell(r, cmap['shipment_date']).value, int(ws.cell(r, cmap['invoice_number']).value), r) for r in
-                 rows]
-        pos = bisect.bisect_left([(d, inv) for d, inv, _ in pairs], (rec.shipment_date, rec.invoice_number))
-        return pairs[pos][2] if pos < len(pairs) else end
+
+        sd = rec.shipment_date
+        if isinstance(sd, pd.Timestamp) or isinstance(sd, datetime):
+            target_date = sd.date()
+        else:
+            target_date = sd
+
+        target = (target_date, rec.invoice_number)
+
+        for r in range(start, end):
+            raw = ws.cell(r, cmap['shipment_date']).value
+
+            if isinstance(raw, datetime):
+                date_val = raw.date()
+            elif isinstance(raw, date):
+                date_val = raw
+            elif isinstance(raw, str):
+                try:
+                    date_val = date.fromisoformat(raw)
+                except ValueError:
+                    continue
+            else:
+                continue
+
+            inv_raw = ws.cell(r, cmap['invoice_number']).value
+            try:
+                inv = int(inv_raw)
+            except (ValueError, TypeError):
+                continue
+
+            if (date_val, inv) >= target:
+                return r
+
+        return end
 
     @staticmethod
     def _write_record(ws, row, rec, cmap):

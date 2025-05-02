@@ -18,7 +18,7 @@ if __name__ == "__main__":
         processor.process_invoices()
 
         current_date = datetime.now().strftime("%d-%m-%Y")
-        output_path = f"output/{current_date}-EXP-2.xlsx"
+        output_path = f"output/{current_date}-EXP.xlsx"
 
         excel_generator = ExcelGenerator(processor.df)
         excel_generator.generate_excel(output_path, existing_excel)
