@@ -1,9 +1,11 @@
 import os
+import re
 from datetime import datetime, date
 
 import openpyxl
 import pandas as pd
 from openpyxl import Workbook
+from openpyxl.formula.translate import Translator, TranslatorError
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
@@ -74,6 +76,7 @@ class ExcelGenerator:
         formats = Constants.COLUMN_FORMATS
 
         header_map = self._map_headers(ws)
+        self._remove_total_rows(ws, header_map)
         struct = self._find_data_block(ws, header_map)
         existing = self._collect_existing_keys(ws, struct, header_map)
 
@@ -81,14 +84,13 @@ class ExcelGenerator:
         new_records = [row for _, row in df.iterrows() if
                        (row.vat_number, row.invoice_number, row.nc8_code) not in existing]
 
-        initial_vats = set(struct['vat_groups'])
-        new_vats = {}
+        if not new_records:
+            return
 
         for rec in new_records:
             row_idx = self._find_insert_rows(ws, rec, struct, header_map)
             ws.insert_rows(row_idx)
             self._write_record(ws, row_idx, rec, header_map)
-            self._advance_structure(struct, row_idx)
 
             formulas = self._build_formulas_for_row(row_idx, rec)
             for field, col in header_map.items():
@@ -101,27 +103,17 @@ class ExcelGenerator:
                         cell.value = val
                 if field in formats:
                     cell.number_format = formats[field]
-            v = rec.vat_number
-            if v not in initial_vats and v not in new_vats:
-                new_vats[v] = row_idx
 
-        self._rebuild_totals(ws, struct)
+        for r in range(struct['data_start'], struct['data_end'] + 1):
+            for col in range(1, ws.max_column + 1):
+                cell = ws.cell(row=r, column=col)
+                if isinstance(cell.value, str) and cell.value.startswith('='):
+                    formula = cell.value
+                    cell.value = re.sub(r'([A-Z]+)(\d+)', lambda m: f"{m.group(1)}{r}", formula)
 
-        for vat, start in new_vats.items():
-            count = sum(1 for r in new_records if r.vat_number == vat)
-            end = start + count - 1
-            tot_row = end + 1
-            ws.insert_rows(tot_row)
-
-            idx = header_map['vat_number']
-            header_cell = ws.cell(row=tot_row, column=idx, value=f"Total {vat}")
-            header_cell.font = Font(bold=True, size=12, name='Arial')
-
-            for field in ('net_weight', 'value_ron', 'statistic'):
-                col = header_map[field]
-                letter = get_column_letter(col)
-                sum_cell = ws.cell(row=tot_row, column=col, value=f"=SUM({letter}{start}:{letter}{end})")
-                sum_cell.font = Font(bold=True, size=12, name='Arial')
+        struct = self._find_data_block(ws, header_map)
+        self._recompute_nr_crt(ws, struct, header_map)
+        self._insert_total_rows(ws, struct, header_map)
 
         wb.save(dest_path)
 
@@ -238,10 +230,20 @@ class ExcelGenerator:
                 group = struct['vat_groups'].setdefault(label, {})
                 group['end'] = row_idx
             elif vat and num and vat != current_vat:
+                if current_vat and current_vat in struct['vat_groups'] and struct['vat_groups'][current_vat].get(
+                        'end') is None:
+                    struct['vat_groups'][current_vat]['end'] = row_idx
                 current_vat = vat
                 struct['vat_groups'][vat] = {'start': row_idx, 'end': None}
+
         if struct['blank_row'] is None:
             struct['blank_row'], struct['data_end'] = ws.max_row + 1, ws.max_row
+
+        data_end = struct['data_end']
+        for vat, group in struct['vat_groups'].items():
+            if group.get('end') is None:
+                group['end'] = data_end + 1
+
         return struct
 
     @staticmethod
@@ -258,24 +260,44 @@ class ExcelGenerator:
 
     @staticmethod
     def _find_insert_rows(ws, rec, struct, cmap):
-        """Determine the correct row for inserting a new record."""
-        grp = struct['vat_groups'].get(rec.vat_number)
-        if not grp or not grp.get('end'):
-            return struct['data_end'] + 1
-
-        start, end = grp['start'], grp['end']
+        """Determine the correct row for inserting a new record, updating struct accordingly."""
+        vat = rec.vat_number
+        grp = struct['vat_groups'].get(vat)
 
         sd = rec.shipment_date
-        if isinstance(sd, pd.Timestamp) or isinstance(sd, datetime):
+        if isinstance(sd, (pd.Timestamp, datetime)):
             target_date = sd.date()
         else:
             target_date = sd
-
         target = (target_date, rec.invoice_number)
 
+        if not grp or not grp.get('end'):
+            vats = [(v, g['start']) for v, g in struct['vat_groups'].items() if g.get('start') is not None]
+            vats.sort(key=lambda x: x[0])
+            for v_existing, start_row in vats:
+                if v_existing > vat:
+                    insert_row = start_row
+                    break
+            else:
+                insert_row = struct['data_end'] + 1
+
+            for other_v, other_grp in struct['vat_groups'].items():
+                if other_grp.get('start') is not None and other_grp['start'] >= insert_row:
+                    other_grp['start'] += 1
+                if other_grp.get('end') is not None and other_grp['end'] >= insert_row:
+                    other_grp['end'] += 1
+
+            struct['vat_groups'][vat] = {'start': insert_row, 'end': insert_row + 1}
+
+            struct['data_end'] += 1
+            struct['blank_row'] = struct['data_end'] + 1
+
+            return insert_row
+
+        start, end = grp['start'], grp['end']
+        insert_row = None
         for r in range(start, end):
             raw = ws.cell(r, cmap['shipment_date']).value
-
             if isinstance(raw, datetime):
                 date_val = raw.date()
             elif isinstance(raw, date):
@@ -295,9 +317,26 @@ class ExcelGenerator:
                 continue
 
             if (date_val, inv) >= target:
-                return r
+                insert_row = r
+                break
 
-        return end
+        if insert_row is None:
+            insert_row = end
+
+        for other_v, other_grp in struct['vat_groups'].items():
+            if other_v == vat:
+                continue
+            if other_grp.get('start') is not None and other_grp['start'] >= insert_row:
+                other_grp['start'] += 1
+            if other_grp.get('end') is not None and other_grp['end'] >= insert_row:
+                other_grp['end'] += 1
+
+        struct['vat_groups'][vat]['end'] += 1
+
+        struct['data_end'] += 1
+        struct['blank_row'] = struct['data_end'] + 1
+
+        return insert_row
 
     @staticmethod
     def _write_record(ws, row, rec, cmap):
@@ -310,15 +349,6 @@ class ExcelGenerator:
                     val = alt
             cell = ws.cell(row=row, column=col, value=val)
             cell.font = Font(size=12, name='Arial')
-
-    @staticmethod
-    def _advance_structure(struct, ins):
-        """Adjust data block indices after row insertion."""
-        struct['data_end'] += 1
-        struct['blank_row'] += 1
-        for g in struct['vat_groups'].values():
-            if g.get('start', 0) >= ins: g['start'] += 1
-            if g.get('end', 0) and g['end'] >= ins: g['end'] += 1
 
     @staticmethod
     def _build_formulas_for_row(row_idx, row):
@@ -359,20 +389,85 @@ class ExcelGenerator:
         return formulas
 
     @staticmethod
-    def _rebuild_totals(ws, struct):
-        """Update Total rows formulas to match new data ranges."""
-        for grp in struct['vat_groups'].values():
-            start = grp.get('start', 0)
-            end_row = grp.get('end', 0) - 1
-            total_row = grp.get('end')
-            if start and end_row >= start and total_row:
-                for cell in ws[total_row]:
-                    f = cell.value
-                    if not (isinstance(f, str) and f.startswith('=SUM(') and f.endswith(')')):
-                        continue
-                    inside = f[f.find('(') + 1: f.rfind(')')]
-                    if ':' not in inside:
-                        continue
-                    start_ref, end_ref = inside.split(':', 1)
-                    col = ''.join(ch for ch in start_ref if ch.isalpha())
-                    cell.value = f"=SUM({col}{start}:{col}{end_row})"
+    def _remove_total_rows(ws, header_map):
+        """
+        Remove all existing 'Total {vat_number}' rows from the worksheet.
+        """
+        vat_col = header_map['vat_number']
+        rows_to_delete = []
+
+        for row in range(2, ws.max_row + 1):
+            cell_value = ws.cell(row=row, column=vat_col).value
+            if isinstance(cell_value, str) and cell_value.startswith('Total '):
+                rows_to_delete.append(row)
+
+        for row in sorted(rows_to_delete, reverse=True):
+            ws.delete_rows(row)
+
+    @staticmethod
+    def _recompute_nr_crt(ws, struct, header_map):
+        """
+        Recompute and rewrite the nr_crt sequence for each VAT block, starting at 1.
+        """
+        nr_crt_col = header_map['nr_crt']
+        vat_col = header_map['vat_number']
+
+        for vat, group in struct['vat_groups'].items():
+            start = group.get('start')
+            end = group.get('end')
+
+            if not start or not end:
+                continue
+
+            counter = 1
+
+            for row in range(start, end):
+                cell_value = ws.cell(row=row, column=vat_col).value
+                if isinstance(cell_value, str) and cell_value.startswith('Total '):
+                    continue
+
+                ws.cell(row=row, column=nr_crt_col).value = counter
+                counter += 1
+
+    @staticmethod
+    def _insert_total_rows(ws, struct, header_map):
+        """
+        Insert a 'Total {vat_number}' row after each VAT block with SUM formulas.
+        """
+        vat_col = header_map['vat_number']
+
+        vat_items = [(vat, grp['start'], grp['end']) for vat, grp in struct['vat_groups'].items() if
+                     grp.get('start') and grp.get('end')]
+        vat_items.sort(key=lambda x: x[1])
+
+        total_inserted = 0
+
+        for vat, orig_start, orig_end in vat_items:
+            new_start = orig_start + total_inserted
+            new_end = orig_end + total_inserted
+
+            if total_inserted:
+                for row in ws.iter_rows(min_row=new_start, max_row=new_end - 1):
+                    for cell in row:
+                        if isinstance(cell.value, str) and cell.value.startswith('='):
+                            try:
+                                cell.value = Translator(cell.value, origin=cell.coordinate).translate_formula(
+                                    row_delta=total_inserted)
+                            except TranslatorError:
+                                pass
+
+            ws.insert_rows(new_end)
+            total_inserted += 1
+
+            label_cell = ws.cell(row=new_end, column=vat_col, value=f"Total {vat}")
+            label_cell.font = Font(bold=True, size=12, name='Arial')
+
+            for field in ('net_weight', 'value_ron', 'statistic'):
+                if field in header_map:
+                    col_idx = header_map[field]
+                    col_letter = get_column_letter(col_idx)
+                    sum_formula = f"=SUM({col_letter}{new_start}:{col_letter}{new_end - 1})"
+                    sum_cell = ws.cell(row=new_end, column=col_idx, value=sum_formula)
+                    sum_cell.font = Font(bold=True, size=12, name='Arial')
+                    if field in Constants.COLUMN_FORMATS:
+                        sum_cell.number_format = Constants.COLUMN_FORMATS[field]
