@@ -1,6 +1,7 @@
 /build
 /dist
 /input
+/logs
 /output
 config.json
 .idea/workspace.xml

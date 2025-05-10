@@ -7,6 +7,7 @@ from .get_bnr_exchange_rate import get_bnr_exchange_rate
 from .get_country_code_from_address import get_country_code_from_address
 from .get_delivery_location import get_delivery_location
 from .get_previous_workday import get_previous_workday
+from .logger import get_logger, setup_logger, set_log_level
 from .parse_mixed_number import parse_mixed_number
 from .round_to_n_decimals import round_to_n_decimals
 from .show_progress_bar import show_progress_bar

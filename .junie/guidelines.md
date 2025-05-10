@@ -1,154 +1,172 @@
 # PDF to Excel Extractor - Developer Guidelines
 
-This document provides essential information for developers working on the PDF to Excel Extractor project.
+This document provides specific information for developers working on the PDF to Excel Extractor project. It includes
+build/configuration instructions, testing information, and additional development details.
 
 ## Build/Configuration Instructions
 
-### Environment Setup
+### Development Environment Setup
 
 1. **Python Environment**:
-    - Python 3.9+ is recommended
+    - Python 3.8+ is required
     - Create a virtual environment:
-      ```
+      ```powershell
       python -m venv .venv
-      .venv\Scripts\activate
-      ```
-    - Install dependencies:
-      ```
+      .\.venv\Scripts\activate
       pip install -r requirements.txt
       ```
 
-2. **Development Mode**:
-    - Run the application directly with:
-      ```
-      python main.py
-      ```
+2. **Running the Application in Development Mode**:
+   ```powershell
+   python main.py
+   ```
 
-3. **Building Executable**:
-    - The project uses PyInstaller to create standalone executables
-    - Build with:
-      ```
-      python setup.py
-      ```
-    - The executable will be created in the `dist/PDFToExcelApp` directory
-    - The build process automatically includes all necessary assets and dependencies
+### Building the Portable Executable
 
-4. **Configuration**:
-    - Application settings are stored in `config.json` and the `config` directory
-    - Constants are defined in `config/constants.py`
-    - Modify these files to adjust application behavior
+The application can be packaged as a standalone Windows executable using PyInstaller:
+
+1. **Generate the executable**:
+   ```powershell
+   python setup.py
+   ```
+
+2. **Build Configuration**:
+    - The build configuration is defined in `setup.py` and `PDFToExcelApp.spec`
+    - The executable is created in the `dist/PDFToExcelApp` directory
+    - The build includes:
+        - Multi-file distribution for better performance
+        - Level 2 optimization
+        - UPX compression for smaller file size
+        - No console window (windowed mode only)
+
+3. **Distribution Structure**:
+   ```
+   dist/PDFToExcelApp/
+   ├── PDFToExcelApp.exe     # Main executable
+   ├── assets/               # Application assets
+   ├── config/               # Configuration files
+   ├── functions/            # Utility functions
+   ├── modules/              # Core modules
+   ├── _internal/            # Dependencies and libraries
+   ├── input/                # Place input PDF files here
+   └── output/               # Generated Excel files
+   ```
 
 ## Testing Information
 
 ### Running Tests
 
 1. **Running All Tests**:
-   ```
+   ```powershell
    python -m unittest discover tests
    ```
 
-2. **Running Specific Tests**:
-   ```
-   python -m unittest tests/test_file_name.py
+2. **Running a Specific Test File**:
+   ```powershell
+   python -m unittest tests/test_convert_to_date.py
    ```
 
 3. **Running a Specific Test Case**:
-   ```
-   python -m unittest tests.test_file_name.TestClassName.test_method_name
+   ```powershell
+   python -m unittest tests.test_convert_to_date.TestConvertToDate.test_string_format
    ```
 
 ### Adding New Tests
 
-1. **Test Structure**:
-    - Tests use Python's standard `unittest` framework
-    - Place test files in the `tests` directory
-    - Name test files with the pattern `test_*.py`
-    - Name test classes with the pattern `Test*`
-    - Name test methods with the pattern `test_*`
+1. **Test File Structure**:
+    - Create test files in the `tests` directory
+    - Name test files with the prefix `test_` followed by the name of the module being tested
+    - Use the `unittest` framework
 
-2. **Test Example**:
+2. **Test Class Structure**:
+    - Create a test class that inherits from `unittest.TestCase`
+    - Name the test class with the prefix `Test` followed by the name of the function or class being tested
+    - Include descriptive docstrings for each test method
+
+3. **Test Method Structure**:
+    - Name test methods with the prefix `test_` followed by a description of what is being tested
+    - Include assertions to verify expected behavior
+    - Use `self.subTest` for testing multiple cases within a single test method
+
+4. **Example Test**:
    ```python
    import unittest
-   from datetime import datetime
-   
-   from functions import convert_to_date
-   
-   class TestConvertToDate(unittest.TestCase):
-       def test_string_format(self):
-           """Test conversion of strings in the primary format."""
-           date_str = "15.03.2025"
-           expected = datetime(2025, 3, 15)
-           self.assertEqual(convert_to_date(date_str), expected)
+   from functions import round_to_n_decimals
+
+   class TestRoundToNDecimals(unittest.TestCase):
+       def test_default_rounding(self):
+           """Test rounding with default precision (2 decimals)."""
+           self.assertEqual(round_to_n_decimals(3.14159), 3.14)
+           self.assertEqual(round_to_n_decimals(2.999), 3.0)
    
    if __name__ == "__main__":
        unittest.main()
    ```
 
-3. **Test Best Practices**:
-    - Write tests for all new functionality
-    - Use descriptive test method names
-    - Include docstrings explaining what each test does
-    - Use `self.subTest` for testing multiple cases within a single test method
-    - Test edge cases and error conditions
+5. **Running the Example Test**:
+   ```powershell
+   python -m unittest tests/test_round_to_n_decimals.py
+   ```
 
 ## Additional Development Information
 
-### Code Structure
+### Project Structure
 
-1. **Project Organization**:
-    - `assets/`: Application icons and images
-    - `config/`: Configuration files and constants
-    - `functions/`: Utility functions used throughout the application
-    - `input/`: Directory for input PDF files
-    - `modules/`: Core application modules
-    - `output/`: Directory for generated Excel files
-    - `tests/`: Test files
+The project follows a modular structure:
 
-2. **Key Modules**:
-    - `main.py`: Application entry point
-    - `qt_ui.py`: PyQt6 user interface
-    - `modules/invoice_processor.py`: Core PDF processing logic
-    - `modules/excel_generator.py`: Excel file generation
+- **modules/**: Core application modules
+    - `invoice_processor.py`: Handles PDF data extraction
+    - `excel_generator.py`: Generates Excel files from extracted data
 
-### Code Style
+- **functions/**: Utility functions
+    - Each function is in its own file for better maintainability
+    - Functions are imported directly from the package (e.g., `from functions import convert_to_date`)
 
-1. **Formatting**:
-    - Follow PEP 8 guidelines
-    - Use four spaces for indentation
-    - Maximum line length of 120 characters
+- **config/**: Configuration files
+    - `constants.py`: Defines column formats, headers, and other constants
+
+- **assets/**: Application assets (icons, etc.)
+
+### Code Style Guidelines
+
+1. **Naming Conventions**:
+    - Use snake_case for functions, methods, and variables
+    - Use PascalCase for classes
+    - Use UPPER_CASE for constants
 
 2. **Documentation**:
     - Include docstrings for all functions, classes, and methods
-    - Use descriptive variable and function names
-    - Comment complex logic
+    - Use type hints where appropriate
 
 3. **Error Handling**:
-    - Use try/except blocks for error-prone operations
-    - Log errors with descriptive messages
-    - Provide user-friendly error messages in the UI
+    - Use try-except blocks for operations that might fail
+    - Log errors with appropriate messages
+    - Return None or default values for functions that can't complete their operation
 
-### Common Development Tasks
+### Performance Considerations
 
-1. **Adding New PDF Processing Features**:
-    - Extend the `InvoiceProcessor` class in `modules/invoice_processor.py`
-    - Add new extraction methods following the existing pattern
-    - Update the UI in `qt_ui.py` if needed
+1. **PDF Processing**:
+    - PDF processing is done in parallel using `concurrent.futures`
+    - Progress is tracked and reported via callbacks
 
-2. **Modifying Excel Output**:
-    - Update the `ExcelGenerator` class in `modules/excel_generator.py`
-    - Modify column formats in `functions/enforce_column_formats.py`
+2. **Caching**:
+    - Use `@lru_cache` for expensive operations like fetching exchange rates
 
-3. **Debugging Tips**:
-    - Use the `sandbox.py` file for testing code snippets
-    - Check the input/output directories for sample files
-    - Run with specific test PDFs to isolate issues
+3. **Excel Generation**:
+    - Excel files are generated using pandas and openpyxl
+    - Formulas are updated when new rows are inserted
+    - Totals are recalculated after modifications
 
-### Known Issues and Improvements
+### Debugging Tips
 
-1. **Date Parsing Warning**:
-    - The `convert_to_date` function generates a warning when parsing dates in %d/%m/%Y format
-    - Consider adding `dayfirst=True` to the `pd.to_datetime()` call
+1. **PDF Extraction Issues**:
+    - Check the coordinates in `calculate_coordinates.py`
+    - Use `pdfplumber.open(pdf_path).pages[0].to_image().save("debug.png")` to visualize the PDF
 
-2. **Performance Considerations**:
-    - Large PDF files may cause memory issues
-    - Consider implementing batch processing for large files
+2. **Excel Generation Issues**:
+    - Set breakpoints in `excel_generator.py` to inspect the data
+    - Check the column formats in `constants.py`
+
+3. **UI Issues**:
+    - Use `print` statements or logging in the PyQt6 event handlers
+    - Check the signal-slot connections in `qt_ui.py`

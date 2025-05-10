@@ -13,8 +13,11 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QLabel, QFileDia
                              QButtonGroup, QGroupBox, QCheckBox, QToolButton)
 
 from config import Constants
+from functions import get_logger
 from modules.excel_generator import ExcelGenerator
 from modules.invoice_processor import InvoiceProcessor
+
+logger = get_logger("pdf_to_excel.ui")
 
 
 def load_last_directory():
@@ -40,7 +43,7 @@ def save_last_directory(directory: str):
         with open(Constants.CONFIG_FILE, "w", encoding="utf-8") as f:
             f.write(json.dumps({"last_directory": directory}, indent=4))
     except IOError:
-        print("Failed to save last directory")
+        logger.error("Failed to save last directory")
 
 
 # noinspection PyUnresolvedReferences
@@ -74,7 +77,7 @@ class ProcessingThread(QThread):
                 temp_path = shutil.copy(str(Path(pdf)), os.path.join(temp_dir, Path(pdf).name))
                 temp_paths.append(temp_path)
             except Exception as e:
-                print(f"[LOG] Error copying file {pdf}: {e}")
+                logger.error(f"Error copying file {pdf}: {e}")
         return temp_paths
 
     @staticmethod
@@ -105,7 +108,7 @@ class ProcessingThread(QThread):
 
                 return final_path, processor.df
         except Exception as e:
-            print(f"[LOG] Error in process_invoices: {e}")
+            logger.error(f"Error in process_invoices: {e}")
             return "", pd.DataFrame()
 
     def _progress_callback(self, processed, total):
@@ -123,11 +126,11 @@ class ProcessingThread(QThread):
             output_path, df = self.process_invoices()
             self.finished.emit(output_path, df)
         except Exception as e:
-            print(f"[LOG] Error in ProcessingThread: {e}")
+            logger.error(f"Error in ProcessingThread: {e}")
             self.finished.emit("", pd.DataFrame())
 
 
-# noinspection PyUnresolvedReferences,SpellCheckingInspection
+# noinspection PyUnresolvedReferences
 class PDFToExcelApp(QWidget):
     """
     Main window for selecting and processing PDF invoices into Excel.

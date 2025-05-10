@@ -3,377 +3,298 @@
 ## Introduction
 
 This document outlines a comprehensive improvement plan for the PDF to Excel Extractor application. Based on an analysis
-of the current codebase and the improvement tasks outlined in the project documentation, this plan identifies key areas
-for enhancement and provides a detailed roadmap for implementation.
+of the current codebase and project requirements, this plan identifies key areas for enhancement and provides specific
+recommendations for implementation. The plan is organized by functional areas and prioritizes improvements that will
+have the most significant impact on application performance, maintainability, and user experience.
 
-## Current System Overview
+## Current System Analysis
 
-The PDF to Excel Extractor is a PyQt6-based desktop application designed to extract data from PDF invoices and convert
-it to Excel format. The application consists of the following key parts:
+The PDF to Excel Extractor is a desktop application that processes PDF invoices and generates structured Excel files.
+Key components include:
 
-1. **User Interface (`qt_ui.py`)**: A PyQt6-based GUI that allows users to select PDF files, configure processing
-   options, and initiate the extraction process.
-2. **Invoice Processor (`modules/invoice_processor.py`)**: Handles the extraction of data from PDF invoices, including
-   company information, invoice numbers, NC8 codes, and other relevant data.
-3. **Excel Generator (`modules/excel_generator.py`)**: Converts the extracted data to Excel format, applying formatting,
-   formulas, and calculations.
-4. **Utility Functions (`functions/`)**: Various helper functions for data processing, formatting, and validation.
+1. **User Interface (qt_ui.py)**: A PyQt6-based GUI that allows users to select PDF files, configure processing options,
+   and initiate the extraction process.
+
+2. **Invoice Processing (invoice_processor.py)**: Extracts data from PDF invoices using pdfplumber, including company
+   information, invoice numbers, NC8 codes, weights, and currency values.
+
+3. **Excel Generation (excel_generator.py)**: Creates formatted Excel files from the extracted data, with support for
+   merging with existing files and applying formulas.
+
+4. **Utility Functions**: Various helper functions for tasks such as coordinate calculation, date conversion, and
+   exchange rate fetching.
+
+The application successfully handles complex scenarios like multipage invoices and proportional weight distribution, but
+there are opportunities for improvement in several areas.
 
 ## Key Goals and Constraints
 
-### Goals
+### Goals:
 
-1. **Improve Code Quality and Maintainability**
-    - Refactor large methods to improve readability and maintainability
-    - Increase test coverage to ensure reliability
-    - Enhance code documentation for better developer onboarding
-    - Address code duplication to improve maintainability
+1. Improve code organization and maintainability
+2. Enhance error handling and robustness
+3. Optimize performance for large batches of PDFs
+4. Improve user experience and interface design
+5. Expand support for different invoice formats
+6. Implement better testing and documentation
+7. Ensure security and compliance with data handling standards
 
-2. **Enhance Performance**
-    - Optimize PDF processing for better handling of large files
-    - Improve multithreading implementation for better concurrency
-    - Optimize Excel generation for large datasets
-    - Implement caching mechanisms to reduce redundant processing
+### Constraints:
 
-3. **Improve User Experience**
-    - Enhance the user interface for better usability
-    - Add detailed progress reporting during processing
-    - Improve error feedback for better troubleshooting
-    - Enhance accessibility features
+1. Maintain compatibility with existing PDF formats
+2. Preserve core functionality during refactoring
+3. Ensure backward compatibility with existing Excel outputs
+4. Keep the application portable and easy to distribute
+5. Minimize dependencies to reduce executable size
+6. Maintain support for Windows operating systems
 
-4. **Expand Feature Set**
-    - Add support for more PDF formats
-    - Enhance Excel output options
-    - Implement batch processing improvements
-    - Add data validation features
+## Improvement Areas
 
-5. **Strengthen Security**
-    - Implement input validation to prevent security issues
-    - Add data protection features for sensitive information
-    - Enhance application security against tampering
+### 1. Code Organization and Structure
 
-### Constraints
+#### Current State
 
-1. **Backward Compatibility**
-    - Maintain compatibility with existing PDF formats
-    - Ensure Excel output remains compatible with existing workflows
+The codebase has several large methods (e.g., `_process_single_invoice()` in invoice_processor.py and
+`_append_new_invoices_to_workbook()` in excel_generator.py) that handle multiple responsibilities. Configuration values
+are hardcoded in constants.py, and there's tight coupling between components.
 
-2. **Performance Requirements**
-    - The application must handle large PDF files efficiently
-    - Processing time should be reasonable for batch operations
+#### Recommendations
 
-3. **User Skill Level**
-    - The application should remain accessible to non-technical users
-    - Complex features should be optional and not complicate the basic workflow
+1. **Refactor Large Methods**
+    - Break down `_process_single_invoice()` into smaller, focused methods
+    - Extract repeated patterns into helper methods
+    - Improve method naming for better clarity
 
-## Detailed Improvement Plan
+2. **Implement Configuration Management**
+    - Move hardcoded values from constants.py to a JSON/YAML config file
+    - Create a configuration manager class for loading/saving settings
+    - Add user-configurable options for common settings
 
-### 1. Architecture and Structure Improvements
+3. **Apply Dependency Injection**
+    - Reduce tight coupling between modules
+    - Make dependencies explicit in class constructors
+    - Improve testability of components
 
-#### 1.1 Implement Proper Logging System
+4. **Implement Logging System**
+    - Replace print statements with proper logging
+    - Add configurable log levels (DEBUG, INFO, WARNING, ERROR)
+    - Create log file output option for troubleshooting
 
-**Rationale**: The current application uses print statements for debugging and error reporting, which is inadequate for
-production use. A structured logging system would improve error tracking and debugging.
+### 2. Error Handling and Robustness
 
-**Implementation Plan**:
+#### Current State
 
-- Replace print statements with structured logging using Python's `logging` module
-- Add configurable log levels (DEBUG, INFO, WARNING, ERROR)
-- Implement log rotation to manage log file size
-- Add log file viewing capability to the UI for user troubleshooting
+Error handling is inconsistent across the application, with some areas using try-except blocks and others allowing
+exceptions to propagate. There's limited validation of inputs and outputs, and no retry mechanisms for network
+operations.
 
-#### 1.2 Refactor Code Architecture
+#### Recommendations
 
-**Rationale**: The current architecture mixes UI logic with business logic, making the code harder to maintain and test.
-A more structured architecture pattern would improve code organization.
+1. **Improve Error Handling**
+    - Add specific exception types for different extraction failures
+    - Implement graceful fallbacks for missing data
+    - Create detailed error messages for troubleshooting
 
-**Implementation Plan**:
+2. **Add Input Validation**
+    - Validate PDF files before processing
+    - Check for required fields in extracted data
+    - Provide clear feedback on invalid inputs
 
-- Separate UI logic from business logic more clearly
-- Implement Model-View-Controller (MVC) or Model-View-ViewModel (MVVM) pattern
-- Create clear interfaces between components
-- Use dependency injection to reduce coupling between components
+3. **Implement Retry Mechanisms**
+    - Add retries for network operations (exchange rate fetching)
+    - Implement exponential backoff for failed operations
+    - Add timeout handling for external services
 
-#### 1.3 Improve Configuration Management
+4. **Enhance File Handling**
+    - Handle file locks and permission issues gracefully
+    - Implement safe file operations with atomic writes
+    - Add backup creation before modifying existing files
 
-**Rationale**: Many configuration values are hardcoded, making the application less flexible and harder to maintain.
+### 3. Performance Optimization
 
-**Implementation Plan**:
+#### Current State
 
-- Move hardcoded values to configuration files
-- Implement environment-specific configurations
-- Add validation for configuration values
-- Create a configuration UI for user-adjustable settings
+The application uses concurrent.futures for parallel processing of PDFs, but there are opportunities for further
+optimization, especially for memory usage and Excel generation.
 
-#### 1.4 Enhance Error Handling
+#### Recommendations
 
-**Rationale**: The current error handling is inconsistent and doesn't provide clear feedback to users.
+1. **Profile and Optimize PDF Extraction**
+    - Identify bottlenecks in PDF processing
+    - Optimize text extraction algorithms
+    - Implement caching for repeated operations
 
-**Implementation Plan**:
+2. **Improve Memory Usage**
+    - Reduce memory footprint for large PDF batches
+    - Implement streaming for large file processing
+    - Add memory usage monitoring
 
-- Implement centralized error handling
-- Add more specific exception types for different error scenarios
-- Improve error messages for better user feedback
-- Add error recovery suggestions for common issues
+3. **Optimize Excel Generation**
+    - Reduce unnecessary cell updates
+    - Batch write operations for better performance
+    - Optimize formula calculations
 
-### 2. Code Quality Improvements
+4. **Enhance Background Processing**
+    - Improve the existing threading model
+    - Add task queue for batch processing
+    - Ensure UI responsiveness during processing
 
-#### 2.1 Increase Test Coverage
+### 4. User Experience
 
-**Rationale**: The current test coverage is limited, making it difficult to ensure that changes don't introduce
-regressions.
+#### Current State
 
-**Implementation Plan**:
+The UI is functional but could benefit from modernization and additional features to improve usability and provide
+better feedback to users.
 
-- Add unit tests for all utility functions
-- Add integration tests for PDF processing
-- Implement UI tests for critical user flows
-- Set up continuous integration for automated testing
+#### Recommendations
 
-#### 2.2 Refactor Large Methods
+1. **Enhance User Interface**
+    - Modernize UI design with better styling
+    - Improve layout for better usability
+    - Add dark mode support
 
-**Rationale**: Several methods in the codebase are overly complex and challenging to maintain, particularly in
-`invoice_processor.py` and `qt_ui.py`.
+2. **Improve Progress Reporting**
+    - Add more detailed progress information
+    - Implement cancellable operations
+    - Show estimated time remaining for long operations
 
-**Implementation Plan**:
+3. **Enhance Error Reporting**
+    - Create user-friendly error messages
+    - Add visual indicators for validation issues
+    - Implement error logs accessible to users
 
-- Break down `_process_single_invoice` method in `invoice_processor.py`
-- Simplify `_extract_nc8_codes` method
-- Refactor `create_file_section` and `handle_processing_finished` methods in `qt_ui.py`
-- Extract reusable UI components
+4. **Add Data Visualization**
+    - Implement preview of extracted data
+    - Add summary statistics for processed files
+    - Create visual reports of extraction results
 
-#### 2.3 Improve Code Documentation
+### 5. Feature Expansion
 
-**Rationale**: Some parts of the codebase lack proper documentation, making it harder for new developers to understand.
+#### Current State
 
-**Implementation Plan**:
+The application supports specific PDF invoice formats but could be extended to handle more formats and provide
+additional functionality.
 
-- Add docstrings to all methods
-- Document complex algorithms
-- Add type hints throughout the codebase
-- Create architecture documentation
+#### Recommendations
 
-#### 2.4 Address Code Duplication
+1. **Support Additional PDF Formats**
+    - Add support for different invoice layouts
+    - Implement template-based extraction
+    - Create a format detection system
 
-**Rationale**: There are instances of code duplication that could be refactored into shared utilities.
+2. **Implement Batch Processing Improvements**
+    - Add scheduling for recurring processing
+    - Implement folder monitoring for automatic processing
+    - Create batch profiles for different processing scenarios
 
-**Implementation Plan**:
+3. **Add Data Export Options**
+    - Support additional output formats (CSV, JSON)
+    - Implement customizable export templates
+    - Add data filtering options
 
-- Create shared utilities for repeated operations
-- Implement DRY (Don't Repeat Yourself) principle
-- Extract common patterns into reusable functions
+4. **Create a Plugin System**
+    - Design extensible architecture for plugins
+    - Implement hooks for custom processing steps
+    - Create documentation for plugin development
 
-### 3. Performance Improvements
+### 6. Testing and Documentation
 
-#### 3.1 Optimize PDF Processing
+#### Current State
 
-**Rationale**: PDF processing is a performance bottleneck, especially for large files.
+The project has some unit tests but lacks comprehensive test coverage. Documentation is limited to README.md and inline
+comments.
 
-**Implementation Plan**:
+#### Recommendations
 
-- Profile and identify bottlenecks in PDF processing
-- Improve memory usage for large PDFs
-- Consider using more efficient PDF libraries
-- Implement incremental processing for large files
+1. **Increase Test Coverage**
+    - Add tests for invoice_processor.py and excel_generator.py
+    - Implement integration tests for end-to-end workflows
+    - Add property-based testing for edge cases
 
-#### 3.2 Enhance Multithreading Implementation
+2. **Improve Code Documentation**
+    - Add/update docstrings for all classes and methods
+    - Include type hints consistently throughout the codebase
+    - Document complex algorithms and business logic
 
-**Rationale**: The current multithreading implementation could be improved for better performance and resource
-utilization.
+3. **Enhance User Documentation**
+    - Create a user manual with screenshots
+    - Add troubleshooting guide
+    - Include examples of supported PDF formats
 
-**Implementation Plan**:
+4. **Create Developer Documentation**
+    - Add architecture overview document
+    - Create contribution guidelines
+    - Document build and deployment processes
 
-- Add proper thread management
-- Implement thread pooling for batch processing
-- Ensure thread safety for shared resources
-- Add cancellation support for long-running operations
+### 7. Security and Compliance
 
-#### 3.3 Optimize Excel Generation
+#### Current State
 
-**Rationale**: Excel generation can be slow for large datasets.
+The application handles potentially sensitive invoice data but lacks specific security features and compliance
+considerations.
 
-**Implementation Plan**:
+#### Recommendations
 
-- Reduce memory usage for large datasets
-- Improve formula generation efficiency
-- Consider streaming for large files
-- Optimize column width calculations
+1. **Implement Secure Data Handling**
+    - Add encryption for cached data
+    - Implement secure deletion of temporary files
+    - Add options for data anonymization
 
-#### 3.4 Implement Caching Mechanisms
+2. **Add Audit Logging**
+    - Log all file operations for audit purposes
+    - Implement tamper-evident logs
+    - Create audit report generation
 
-**Rationale**: The application currently reprocesses files even if they haven't changed.
-
-**Implementation Plan**:
-
-- Cache processed results for repeated operations
-- Add file fingerprinting to detect changes
-- Implement LRU cache for frequently accessed data
-- Add cache invalidation mechanisms
-
-### 4. User Experience Improvements
-
-#### 4.1 Enhance User Interface
-
-**Rationale**: The current UI could be improved for better usability and visual appeal.
-
-**Implementation Plan**:
-
-- Improve layout and spacing
-- Add keyboard shortcuts for common operations
-- Implement drag-and-drop for file selection
-- Enhance visual design and consistency
-
-#### 4.2 Add Progress Reporting
-
-**Rationale**: The current progress reporting is limited, making it difficult for users to estimate processing time.
-
-**Implementation Plan**:
-
-- Show detailed progress during processing
-- Add time estimates for long operations
-- Implement cancellation for long-running tasks
-- Add visual indicators for processing stages
-
-#### 4.3 Improve Error Feedback
-
-**Rationale**: Error messages are not always clear or actionable for users.
-
-**Implementation Plan**:
-
-- Show more detailed error messages
-- Add visual indicators for validation errors
-- Implement recovery suggestions for common errors
-- Create an error log viewer in the UI
-
-#### 4.4 Enhance Accessibility
-
-**Rationale**: The application lacks accessibility features for users with disabilities.
-
-**Implementation Plan**:
-
-- Add screen reader support
-- Improve keyboard navigation
-- Ensure proper contrast ratios
-- Implement resizable UI elements
-
-### 5. Feature Enhancements
-
-#### 5.1 Adds Support for More PDF Formats
-
-**Rationale**: The application currently supports a limited range of PDF formats.
-
-**Implementation Plan**:
-
-- Implement template-based extraction
-- Add configuration for custom PDF layouts
-- Support for scanned PDFs with OCR
-- Create a template editor for custom formats
-
-#### 5.2 Enhance Excel Output Options
-
-**Rationale**: The current Excel output options are limited.
-
-**Implementation Plan**:
-
-- Add support for multiple sheet outputs
-- Implement custom formatting options
-- Add chart generation capabilities
-- Support for different Excel formats (XLSX, CSV, etc.)
-
-#### 5.3 Implement Batch Processing Improvements
-
-**Rationale**: Batch processing could be improved for better efficiency and user control.
-
-**Implementation Plan**:
-
-- Add queue management for large batches
-- Implement pause/resume functionality
-- Add scheduling for automated processing
-- Create batch templates for repeated operations
-
-#### 5.4 Add Data Validation Features
-
-**Rationale**: The application currently lacks data validation capabilities.
-
-**Implementation Plan**:
-
-- Implement validation rules for extracted data
-- Add warnings for suspicious values
-- Create validation reports
-- Allow user-defined validation rules
-
-### 6. Security Enhancements
-
-#### 6.1 Implement Input Validation
-
-**Rationale**: The application doesn't thoroughly validate inputs, which could lead to security issues.
-
-**Implementation Plan**:
-
-- Sanitize all user inputs
-- Validate file contents before processing
-- Add protection against malicious files
-- Implement input size limits
-
-#### 6.2 Add Data Protection Features
-
-**Rationale**: The application handles potentially sensitive business data without adequate protection.
-
-**Implementation Plan**:
-
-- Implement encryption for sensitive data
-- Add secure temporary file handling
-- Implement secure deletion of temporary files
-- Add data anonymization options
-
-#### 6.3 Enhance Application Security
-
-**Rationale**: The application lacks security features to protect against tampering.
-
-**Implementation Plan**:
-
-- Add integrity checks for application files
-- Implement secure update mechanism
-- Add protection against tampering
-- Implement application signing
+3. **Enhance Application Security**
+    - Add integrity checks for application files
+    - Implement secure update mechanism
+    - Add protection against common attack vectors
 
 ## Implementation Roadmap
 
-### Phase 1: Foundation Improvements (1–3 months)
+The improvements should be implemented in phases to ensure stability and allow for proper testing at each stage:
+
+### Phase 1: Foundation Improvements (1-3 months)
 
 - Implement logging system
 - Refactor large methods
 - Improve error handling
-- Add basic tests
+- Add basic input validation
+- Increase test coverage for core functionality
 
-### Phase 2: Performance and Architecture (2–4 months)
+### Phase 2: Performance and UX Enhancements (2-4 months)
 
-- Refactor code architecture
-- Optimize PDF processing
-- Enhance multithreading
-- Improve configuration management
+- Optimize PDF extraction and Excel generation
+- Enhance the user interface
+- Improve progress reporting
+- Implement configuration management
+- Add data visualization features
 
-### Phase 3: User Experience and Features (3–6 months)
+### Phase 3: Feature Expansion (3-6 months)
 
-- Enhance user interface
-- Add progress reporting
+- Support additional PDF formats
 - Implement batch processing improvements
-- Add support for more PDF formats
+- Add data export options
+- Create plugin system architecture
+- Enhance security features
 
-### Phase 4: Security and Advanced Features (4–8 months)
+### Phase 4: Long-term Improvements (6+ months)
 
-- Implement input validation
-- Add data protection features
-- Enhance Excel output options
-- Add data validation features
+- Complete plugin system implementation
+- Add advanced security and compliance features
+- Implement comprehensive audit logging
+- Create advanced reporting capabilities
+- Develop full user and developer documentation
 
 ## Conclusion
 
 This improvement plan provides a comprehensive roadmap for enhancing the PDF to Excel Extractor application. By
-addressing the identified areas for improvement, the application will become more maintainable, performant,
-user-friendly, feature-rich, and secure. The phased implementation approach allows for incremental improvements while
-maintaining a functional application throughout the development process.
+addressing the identified areas for improvement, the application will become more maintainable, robust, and
+user-friendly while expanding its capabilities to handle a wider range of use cases.
 
-The plan aligns with the key goals identified in the project documentation and addresses the constraints of the system.
-Regular reviews and adjustments to the plan are recommended as implementation progresses and new requirements or
-challenges emerge.
+The proposed changes respect the existing architecture and functionality while introducing modern software engineering
+practices and features that will benefit both users and developers. Implementation should be prioritized based on the
+impact on user experience and the foundation needed for future enhancements.
+
+Regular reviews of this plan are recommended as implementation progresses to adjust priorities based on user feedback
+and emerging requirements.

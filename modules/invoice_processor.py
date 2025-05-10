@@ -8,7 +8,9 @@ import pdfplumber
 
 from config import Constants
 from functions import calculate_coordinates, get_country_code_from_address, get_bnr_exchange_rate, \
-    get_delivery_location, get_previous_workday, parse_mixed_number
+    get_delivery_location, get_previous_workday, parse_mixed_number, get_logger
+
+logger = get_logger("pdf_to_excel.invoice_processor")
 
 
 class InvoiceProcessor:
@@ -45,14 +47,14 @@ class InvoiceProcessor:
                         result = future.result()
                         results.extend(result)
                     except Exception as e:
-                        print(f"[LOG] Error processing {path}: {e}")
+                        logger.error(f"Error processing {path}: {e}")
                     processed += 1
                     if self.progress_callback:
                         self.progress_callback(processed, total)
 
             self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
         except Exception as e:
-            print(f"[LOG] Error in process_invoices: {e}")
+            logger.error(f"Error in process_invoices: {e}")
 
     @staticmethod
     def _process_single_invoice(pdf_path):
@@ -133,7 +135,7 @@ class InvoiceProcessor:
 
                     return results
         except Exception as e:
-            print(f"[LOG] Error processing PDF {pdf_path}: {e}")
+            logger.error(f"Error processing PDF {pdf_path}: {e}")
             return []
 
     @staticmethod
@@ -146,7 +148,7 @@ class InvoiceProcessor:
             text = page.within_bbox(coords).extract_text()
             return text if text else ""
         except Exception as e:
-            print(f"[LOG] Error extracting section {section_name}: {e}")
+            logger.error(f"Error extracting section {section_name}: {e}")
             return ""
 
     @staticmethod
@@ -189,7 +191,7 @@ class InvoiceProcessor:
             parts = last_line.split(" ")
             return parts[0] if parts else "Unknown"
         except (IndexError, Exception) as e:
-            print(f"[LOG] Error extracting invoice number: {e}")
+            logger.error(f"Error extracting invoice number: {e}")
             return "Unknown"
 
     @staticmethod
@@ -220,7 +222,7 @@ class InvoiceProcessor:
 
         while i < n:
             line = lines[i]
-            joined = f"{line} {lines[i + 1]}" if i + 1 < n else line  # capture split currency lines
+            joined = f"{line} {lines[i + 1]}" if i + 1 < n else line
 
             if m := currency_pattern.search(joined):
                 current_val = parse_mixed_number(m.group(2))
@@ -316,7 +318,7 @@ class InvoiceProcessor:
                 return 0, 0, None
 
         except Exception as e:
-            print(f"[LOG] Error extracting invoice values: {e}")
+            logger.error(f"Error extracting invoice values: {e}")
             return 0, 0, None
 
     @staticmethod
@@ -381,5 +383,5 @@ class InvoiceProcessor:
                     pass
             return datetime.now()
         except Exception as e:
-            print(f"[LOG] Error extracting shipment date: {e}")
+            logger.error(f"Error extracting shipment date: {e}")
             return datetime.now()

@@ -1,164 +1,220 @@
 # PDF to Excel Extractor - Improvement Tasks
 
-This document contains a prioritized list of tasks for improving the PDF to Excel Extractor application. Each task is
-marked with a checkbox that can be checked off when completed.
+This document contains a prioritized list of actionable tasks for improving the PDF to Excel Extractor application. Each
+task includes a brief description and rationale.
 
-## Architecture and Structure Improvements
+## Code Organization and Structure
 
-1. [ ] Implement proper logging system
-    - [ ] Replace print statements with structured logging
-    - [ ] Add configurable log levels
-    - [ ] Create log rotation for production use
-
-2. [ ] Refactor code to follow a more consistent architecture pattern
-    - [ ] Separate UI logic from business logic more clearly
-    - [ ] Consider implementing Model-View-Controller (MVC) or Model-View-ViewModel (MVVM) pattern
-    - [ ] Create clear interfaces between components
-
-3. [ ] Improve configuration management
-    - [ ] Move hardcoded values to configuration files
-    - [ ] Implement environment-specific configurations
-    - [ ] Add validation for configuration values
-
-4. [ ] Enhance error handling
-    - [ ] Implement centralized error handling
-    - [ ] Add more specific exception types
-    - [ ] Improve error messages for better user feedback
-
-5. [ ] Implement dependency injection
-    - [ ] Reduce tight coupling between components
-    - [ ] Make testing easier with mock dependencies
-    - [ ] Improve maintainability and extensibility
-
-## Code Quality Improvements
-
-1. [ ] Increase test coverage
-    - [ ] Add unit tests for all utility functions
-    - [ ] Add integration tests for PDF processing
-    - [ ] Implement UI tests for critical user flows
-    - [ ] Set up continuous integration for automated testing
+1. [x] Implement a logging system
+    - Replace print statements with proper logging
+    - Add configurable log levels (DEBUG, INFO, WARNING, ERROR)
+    - Create log file output option for troubleshooting
 
 2. [ ] Refactor large methods in invoice_processor.py
-    - [ ] Break down _process_single_invoice method
-    - [ ] Simplify _extract_nc8_codes method
-    - [ ] Improve readability of complex regex patterns
+    - Break down _process_single_invoice() into smaller, focused methods
+    - Extract repeated patterns into helper methods
+    - Improve method naming for better clarity
 
-3. [ ] Refactor large methods in qt_ui.py
-    - [ ] Break down create_file_section method
-    - [ ] Simplify handle_processing_finished method
-    - [ ] Extract reusable UI components
+3. [ ] Refactor large methods in excel_generator.py
+    - Break down _append_new_invoices_to_workbook() into smaller methods
+    - Simplify complex logic in _find_insert_rows()
+    - Extract formula generation into a separate utility class
 
-4. [ ] Improve code documentation
-    - [ ] Add docstrings to all methods
-    - [ ] Document complex algorithms
-    - [ ] Add type hints throughout the codebase
+4. [ ] Create a configuration management system
+    - Move hardcoded values from constants.py to a JSON/YAML config file
+    - Implement a config manager class for loading/saving settings
+    - Add user-configurable options for common settings
 
-5. [ ] Address code duplication
-    - [ ] Create shared utilities for repeated operations
-    - [ ] Implement DRY (Don't Repeat Yourself) principle
-    - [ ] Extract common patterns into reusable functions
+5. [ ] Implement proper dependency injection
+    - Reduce tight coupling between modules
+    - Make dependencies explicit in class constructors
+    - Improve testability of components
 
-## Performance Improvements
+## Error Handling and Robustness
 
-1. [ ] Optimize PDF processing
-    - [ ] Profile and identify bottlenecks
-    - [ ] Improve memory usage for large PDFs
-    - [ ] Consider using more efficient PDF libraries
+6. [ ] Improve error handling in PDF processing
+    - Add specific exception types for different extraction failures
+    - Implement graceful fallbacks for missing data
+    - Create detailed error messages for troubleshooting
 
-2. [ ] Enhance multithreading implementation
-    - [ ] Add proper thread management
-    - [ ] Implement thread pooling for batch processing
-    - [ ] Ensure thread safety for shared resources
+7. [ ] Add input validation
+    - Validate PDF files before processing
+    - Check for required fields in extracted data
+    - Provide clear feedback on invalid inputs
 
-3. [ ] Optimize Excel generation
-    - [ ] Reduce memory usage for large datasets
-    - [ ] Improve formula generation efficiency
-    - [ ] Consider streaming for large files
+8. [ ] Implement retry mechanisms
+    - Add retries for network operations (exchange rate fetching)
+    - Implement exponential backoff for failed operations
+    - Add timeout handling for external services
 
-4. [ ] Implement caching mechanisms
-    - [ ] Cache processed results for repeated operations
-    - [ ] Add file fingerprinting to detect changes
-    - [ ] Implement LRU cache for frequently accessed data
+9. [ ] Create a robust file handling system
+    - Handle file locks and permission issues gracefully
+    - Implement safe file operations with atomic writes
+    - Add backup creation before modifying existing files
 
-## User Experience Improvements
+10. [ ] Add data validation for Excel output
+    - Validate data types before writing to Excel
+    - Implement data cleaning for inconsistent inputs
+    - Add checks for formula correctness
 
-1. [ ] Enhance user interface
-    - [ ] Improve layout and spacing
-    - [ ] Add keyboard shortcuts for common operations
-    - [ ] Implement drag-and-drop for file selection
+## Documentation
 
-2. [ ] Add progress reporting
-    - [ ] Show detailed progress during processing
-    - [ ] Add time estimates for long operations
-    - [ ] Implement cancellation for long-running tasks
+11. [ ] Improve code documentation
+    - Add/update docstrings for all classes and methods
+    - Include type hints consistently throughout the codebase
+    - Document complex algorithms and business logic
 
-3. [ ] Improve error feedback
-    - [ ] Show more detailed error messages
-    - [ ] Add visual indicators for validation errors
-    - [ ] Implement recovery suggestions for common errors
+12. [ ] Create developer documentation
+    - Add architecture overview document
+    - Create contribution guidelines
+    - Document build and deployment processes
 
-4. [ ] Enhance accessibility
-    - [ ] Add screen reader support
-    - [ ] Improve keyboard navigation
-    - [ ] Ensure proper contrast ratios
+13. [ ] Enhance user documentation
+    - Create a user manual with screenshots
+    - Add troubleshooting guide
+    - Include examples of supported PDF formats
 
-## Feature Enhancements
+14. [ ] Add inline comments for complex code sections
+    - Document non-obvious algorithms
+    - Explain business rules and domain-specific logic
+    - Add references to external resources where applicable
 
-1. [ ] Add support for more PDF formats
-    - [ ] Implement template-based extraction
-    - [ ] Add configuration for custom PDF layouts
-    - [ ] Support for scanned PDFs with OCR
+15. [ ] Create API documentation
+    - Document public interfaces for each module
+    - Include usage examples
+    - Document expected inputs and outputs
 
-2. [ ] Enhance Excel output options
-    - [ ] Add support for multiple sheet outputs
-    - [ ] Implement custom formatting options
-    - [ ] Add chart generation capabilities
+## Testing
 
-3. [ ] Implement batch processing improvements
-    - [ ] Add queue management for large batches
-    - [ ] Implement pause/resume functionality
-    - [ ] Add scheduling for automated processing
+16. [ ] Increase unit test coverage
+    - Add tests for invoice_processor.py
+    - Add tests for excel_generator.py
+    - Create tests for untested utility functions
 
-4. [ ] Add data validation features
-    - [ ] Implement validation rules for extracted data
-    - [ ] Add warnings for suspicious values
-    - [ ] Create validation reports
+17. [ ] Implement integration tests
+    - Test end-to-end PDF processing workflow
+    - Test Excel generation with various inputs
+    - Test UI interactions
 
-## Documentation and Deployment
+18. [ ] Add property-based testing
+    - Use hypothesis or similar library for property testing
+    - Test with randomized inputs to find edge cases
+    - Verify invariants hold across different inputs
 
-1. [ ] Improve user documentation
-    - [ ] Create comprehensive user guide
-    - [ ] Add video tutorials
-    - [ ] Implement in-app help system
+19. [ ] Create test fixtures and factories
+    - Build reusable test data generators
+    - Create mock PDF files for testing
+    - Implement test helpers for common operations
 
-2. [ ] Enhance developer documentation
-    - [ ] Document architecture and design decisions
-    - [ ] Create API documentation
-    - [ ] Add contribution guidelines
+20. [ ] Implement continuous integration
+    - Set up GitHub Actions or similar CI system
+    - Automate test runs on commits/PRs
+    - Add code quality checks (linting, type checking)
 
-3. [ ] Improve deployment process
-    - [ ] Streamline build process
-    - [ ] Add automated deployment scripts
-    - [ ] Implement version management
+## Performance Optimizations
 
-4. [ ] Add internationalization support
-    - [ ] Extract text strings for translation
-    - [ ] Implement language selection
-    - [ ] Add support for RTL languages
+21. [ ] Profile and optimize PDF extraction
+    - Identify bottlenecks in PDF processing
+    - Optimize text extraction algorithms
+    - Implement caching for repeated operations
 
-## Security Enhancements
+22. [ ] Improve memory usage
+    - Reduce memory footprint for large PDF batches
+    - Implement streaming for large file processing
+    - Add memory usage monitoring
 
-1. [ ] Implement input validation
-    - [ ] Sanitize all user inputs
-    - [ ] Validate file contents before processing
-    - [ ] Add protection against malicious files
+23. [ ] Optimize Excel generation
+    - Reduce unnecessary cell updates
+    - Batch write operations for better performance
+    - Optimize formula calculations
 
-2. [ ] Add data protection features
-    - [ ] Implement encryption for sensitive data
-    - [ ] Add secure temporary file handling
-    - [ ] Implement secure deletion of temporary files
+24. [ ] Implement background processing
+    - Move long-running operations to background threads
+    - Add task queue for batch processing
+    - Improve UI responsiveness during processing
 
-3. [ ] Enhance application security
-    - [ ] Add integrity checks for application files
-    - [ ] Implement secure update mechanism
-    - [ ] Add protection against tampering
+25. [ ] Add caching mechanisms
+    - Cache extracted data for repeated processing
+    - Implement LRU cache for expensive operations
+    - Add disk-based caching for persistent data
+
+## User Experience
+
+26. [ ] Enhance the user interface
+    - Modernize UI design with better styling
+    - Improve layout for better usability
+    - Add dark mode support
+
+27. [ ] Add user preferences
+    - Create preferences dialog
+    - Allow customization of default settings
+    - Persist user preferences between sessions
+
+28. [ ] Improve progress reporting
+    - Add more detailed progress information
+    - Implement cancellable operations
+    - Show estimated time remaining for long operations
+
+29. [ ] Enhance error reporting
+    - Create user-friendly error messages
+    - Add visual indicators for validation issues
+    - Implement error logs accessible to users
+
+30. [ ] Add data visualization
+    - Implement preview of extracted data
+    - Add summary statistics for processed files
+    - Create visual reports of extraction results
+
+## New Features
+
+31. [ ] Support additional PDF formats
+    - Add support for different invoice layouts
+    - Implement template-based extraction
+    - Create a format detection system
+
+32. [ ] Implement batch processing improvements
+    - Add scheduling for recurring processing
+    - Implement folder monitoring for automatic processing
+    - Create batch profiles for different processing scenarios
+
+33. [ ] Add data export options
+    - Support additional output formats (CSV, JSON)
+    - Implement customizable export templates
+    - Add data filtering options
+
+34. [ ] Create a plugin system
+    - Design extensible architecture for plugins
+    - Implement hooks for custom processing steps
+    - Create documentation for plugin development
+
+35. [ ] Add reporting capabilities
+    - Generate summary reports of processed data
+    - Implement data aggregation features
+    - Create visualization of processing statistics
+
+## Security and Compliance
+
+36. [ ] Implement secure handling of sensitive data
+    - Add encryption for cached data
+    - Implement secure deletion of temporary files
+    - Add options for data anonymization
+
+37. [ ] Add audit logging
+    - Log all file operations for audit purposes
+    - Implement tamper-evident logs
+    - Create audit report generation
+
+38. [ ] Improve application security
+    - Add integrity checks for application files
+    - Implement secure update mechanism
+    - Add protection against common attack vectors
+
+39. [ ] Add compliance features
+    - Implement data retention policies
+    - Add GDPR compliance features
+    - Create documentation for compliance requirements
+
+40. [ ] Enhance authentication and authorization
+    - Add user authentication for multi-user environments
+    - Implement role-based access control
+    - Add audit trails for user actions
