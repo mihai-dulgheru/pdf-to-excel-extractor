@@ -472,7 +472,7 @@ class ExcelGenerator:
             formulas["transport"] = ""
 
         if pd.notna(val_ron):
-            formulas["statistic"] = f"=ROUND({cells['value_ron']}+{cells['percentage']}*{cells['transport']}, 0)"
+            formulas["statistic"] = f"=ROUND({cells['value_ron']}+{cells['transport']}*{cells['percentage']}, 0)"
         else:
             formulas["statistic"] = ""
 
