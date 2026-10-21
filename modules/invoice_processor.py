@@ -80,8 +80,9 @@ class InvoiceProcessor:
 
                 company = InvoiceProcessor._extract_company(s2)
                 invoice_number = InvoiceProcessor._extract_invoice_number(s1)
-                nc8_data = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note)
                 origin = InvoiceProcessor._extract_origin(s4)
+                nc8_data = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note,
+                                                               origin)
 
                 destination_field = InvoiceProcessor._extract_field(s3, r"Invoiced to\s*:\s*(.+?)\nCredit transfer",
                                                                     "Unknown", re.DOTALL)
@@ -92,7 +93,7 @@ class InvoiceProcessor:
                                                                                                           page_height,
                                                                                                           is_credit_note)
 
-                if nc8_data == [("INTERNAL ORDER", 0)]:
+                if nc8_data[0][0] == "INTERNAL ORDER":
                     total_net_weight = 0
                 else:
                     total_net_weight = InvoiceProcessor._extract_net_weight(last_page, is_credit_note or is_debit_note)
@@ -105,16 +106,26 @@ class InvoiceProcessor:
                                                                      re.IGNORECASE)
 
                 if len(nc8_data) == 1:
-                    return [{"company": company, "invoice_number": invoice_number, "nc8_code": nc8_data[0][0],
-                             "origin": origin, "destination": destination, "invoice_value_eur": invoice_value_eur,
-                             "net_weight": total_net_weight, "shipment_date": shipment_date.strftime("%d.%m.%Y"),
-                             "exchange_rate": exchange_rate, "value_ron": invoice_value_ron, "vat_number": vat_number,
-                             "delivery_location": delivery_location, "delivery_condition": delivery_condition}]
+                    code, _, code_origin = nc8_data[0]
+                    return [
+                        {"company": company, "invoice_number": invoice_number, "nc8_code": code, "origin": code_origin,
+                         "destination": destination, "invoice_value_eur": invoice_value_eur,
+                         "net_weight": total_net_weight, "shipment_date": shipment_date.strftime("%d.%m.%Y"),
+                         "exchange_rate": exchange_rate, "value_ron": invoice_value_ron, "vat_number": vat_number,
+                         "delivery_location": delivery_location, "delivery_condition": delivery_condition}]
                 else:
-                    proportional_weights = InvoiceProcessor._calculate_proportional_weights(nc8_data, total_net_weight)
+                    per_code_total = sum(val for _, val, _ in nc8_data)
+                    invoice_total = invoice_value_eur if currency == "EUR" else invoice_value_ron
+                    if abs(per_code_total - invoice_total) > 0.01:
+                        logger.warning(f"{pdf_path}: per-code values sum to {per_code_total:.2f}, "
+                                       f"invoice total is {invoice_total:.2f}")
+                    values_only = [(code, val) for (code, val, _) in nc8_data]
+                    proportional_weights = InvoiceProcessor._calculate_proportional_weights(values_only,
+                                                                                            total_net_weight)
 
                     results = []
-                    for (nc8_code, partial_value), (_, proportional_weight) in zip(nc8_data, proportional_weights):
+                    for (code, partial_value, code_origin), (_, proportional_weight) in zip(nc8_data,
+                                                                                            proportional_weights):
                         if currency == "EUR":
                             invoice_value_eur_for_code = partial_value
                             invoice_value_ron_for_code = partial_value * exchange_rate
@@ -125,8 +136,8 @@ class InvoiceProcessor:
                             invoice_value_eur_for_code = 0
                             invoice_value_ron_for_code = 0
 
-                        result = {"company": company, "invoice_number": invoice_number, "nc8_code": nc8_code,
-                                  "origin": origin, "destination": destination,
+                        result = {"company": company, "invoice_number": invoice_number, "nc8_code": code,
+                                  "origin": code_origin, "destination": destination,
                                   "invoice_value_eur": invoice_value_eur_for_code, "net_weight": proportional_weight,
                                   "shipment_date": shipment_date.strftime("%d.%m.%Y"), "exchange_rate": exchange_rate,
                                   "value_ron": invoice_value_ron_for_code, "vat_number": vat_number,
@@ -195,25 +206,24 @@ class InvoiceProcessor:
             return "Unknown"
 
     @staticmethod
-    def _extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note):
+    def _extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note, default_origin):
         """
-        Extract NC-8 codes together with the corresponding value for each code.
+        Extract NC-8 codes together with the corresponding value for each code and origin.
+        Credit notes are split per code like invoices; their values are negated.
         """
-        if is_credit_note:
-            codes = [m.group(1) for page in pdf.pages if (txt := page.extract_text()) for m in
-                     re.finditer(r"Commodity Code\s*:\s*(\d+)", txt)]
-            return [("; ".join(dict.fromkeys(codes)), 0)] if codes else [("Credit Note", 0)]
+        if not is_credit_note:
+            s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
+            if "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
+                return [("INTERNAL ORDER", 0, default_origin)]
 
-        s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
-        if "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
-            return [("INTERNAL ORDER", 0)]
-
-        currency_pattern = re.compile(r"\b(EUR|RON)\b[\s\r\n]+([\d.,]+)[\s\r\n]+([\d.,]+)", re.IGNORECASE)
+        # Only "<currency> <net value>" is required (pdfplumber may push the VAT amount onto a third line);
+        # the net value may group thousands with a space ("1 041,40") or with ,/. ("1,041.40", "1.041,40").
+        currency_pattern = re.compile(r"\b(EUR|RON)\b\s+(\d{1,3}(?: \d{3})+[.,]\d{2}|[\d.,]+)", re.IGNORECASE)
         specialized_pattern = re.compile(
             r"^[A-Za-z0-9]+\s+PER\s+(?:\d{1,3}(?:[.,]\d{3})+|\d+)\s+PC\s+\d+PC\s+([\d.,]+)\s+([\d.,]+)$")
         code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)", re.IGNORECASE)
         purch_pattern = re.compile(r"purch\. order no\.", re.IGNORECASE)
-        origin_pattern = re.compile(r"country of origin", re.IGNORECASE)
+        origin_pattern = re.compile(r"Country of origin\s*:\s*([A-Z]{2})", re.IGNORECASE)
 
         lines = [ln.strip() for page in pdf.pages for ln in (page.extract_text() or "").splitlines() if ln.strip()]
 
@@ -232,38 +242,42 @@ class InvoiceProcessor:
             if m := specialized_pattern.match(line):
                 current_val = parse_mixed_number(m.group(2))
 
-                purch_seen = origin_seen = False
+                purch_seen = False
+                current_origin = default_origin
                 nc8_code = None
                 for j in range(i + 1, min(i + 12, n)):
                     l = lines[j]
-                    purch_seen |= bool(purch_pattern.search(l))
-                    origin_seen |= bool(origin_pattern.search(l))
+                    if purch_pattern.search(l):
+                        purch_seen = True
+                    if m_origin := origin_pattern.search(l):
+                        current_origin = m_origin.group(1).upper()
                     if not nc8_code and (cm := code_pattern.search(l)):
                         nc8_code = cm.group(1)
 
-                    if purch_seen and origin_seen and nc8_code:
-                        pairs.append((nc8_code, current_val))
+                    if purch_seen and nc8_code:
+                        pairs.append((nc8_code, current_val, current_origin))
                         current_val = None
                         i = j
                         break
-                else:
-                    pass
 
             elif cm := code_pattern.search(line):
                 code = cm.group(1)
-                pairs.append((code, current_val if current_val is not None else 0.0))
+                pairs.append((code, current_val if current_val is not None else 0.0, default_origin))
                 current_val = None
 
             i += 1
 
         if not pairs:
-            return [("Unknown", 0)]
+            return [("Credit Note" if is_credit_note else "Unknown", 0, default_origin)]
 
-        merged = defaultdict(float)
-        for code, val in pairs:
-            merged[code] += val
+        sign = -1 if is_credit_note else 1
+        merged_values = defaultdict(float)
+        merged_origin = {}
+        for code, val, origin in pairs:
+            merged_values[code] += sign * val
+            merged_origin[code] = origin
 
-        return [(c, v) for c, v in merged.items()]
+        return [(code, merged_values[code], merged_origin[code]) for code in merged_values]
 
     @staticmethod
     def _extract_origin(section_4_text):
