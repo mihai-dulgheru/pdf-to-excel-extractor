@@ -2,7 +2,6 @@ import concurrent.futures
 import logging
 import os
 import re
-from collections import defaultdict
 from datetime import datetime
 
 import pandas as pd
@@ -251,12 +250,21 @@ class InvoiceProcessor:
             r"^[A-Za-z0-9]+\s+PER\s+(?:\d{1,3}(?:[.,]\d{3})+|\d+)\s+PC\s+\d+PC\s+([\d.,]+)\s+([\d.,]+)$")
         code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)", re.IGNORECASE)
         purch_pattern = re.compile(r"purch\. order no\.", re.IGNORECASE)
-        origin_pattern = re.compile(r"Country of origin\s*:\s*([A-Z]{2})", re.IGNORECASE)
+        origin_pattern = re.compile(r"Country of origin\s*:[ \t]*([A-Za-z]{2})\b", re.IGNORECASE)
 
         lines = [ln.strip() for page in pdf.pages for ln in (page.extract_text() or "").splitlines() if ln.strip()]
 
         pairs, current_val = [], None
         i, n = 0, len(lines)
+
+        def origin_after(idx):
+            """Origin printed for the item whose 'Commodity Code' line is lines[idx] (None when blank)."""
+            for following in lines[idx + 1:idx + 4]:
+                if code_pattern.search(following):
+                    return None
+                if m_origin := origin_pattern.search(following):
+                    return m_origin.group(1).upper()
+            return None
 
         while i < n:
             line = lines[i]
@@ -271,26 +279,22 @@ class InvoiceProcessor:
                 current_val = parse_mixed_number(m.group(2))
 
                 purch_seen = False
-                current_origin = default_origin
                 nc8_code = None
                 for j in range(i + 1, min(i + 12, n)):
                     l = lines[j]
                     if purch_pattern.search(l):
                         purch_seen = True
-                    if m_origin := origin_pattern.search(l):
-                        current_origin = m_origin.group(1).upper()
                     if not nc8_code and (cm := code_pattern.search(l)):
                         nc8_code = cm.group(1)
 
                     if purch_seen and nc8_code:
-                        pairs.append((nc8_code, current_val, current_origin))
+                        pairs.append((nc8_code, current_val, origin_after(j)))
                         current_val = None
                         i = j
                         break
 
             elif cm := code_pattern.search(line):
-                code = cm.group(1)
-                pairs.append((code, current_val if current_val is not None else 0.0, default_origin))
+                pairs.append((cm.group(1), current_val if current_val is not None else 0.0, origin_after(i)))
                 current_val = None
 
             i += 1
@@ -298,14 +302,15 @@ class InvoiceProcessor:
         if not pairs:
             return [("Credit Note" if is_credit_note else "Unknown", 0, default_origin)]
 
+        first_origin = next((origin for _, _, origin in pairs if origin), default_origin)
         sign = -1 if is_credit_note else 1
-        merged_values = defaultdict(float)
-        merged_origin = {}
+        by_code = {}  # code (first seen) -> origin (first seen) -> value; keeps a code's origin rows together
         for code, val, origin in pairs:
-            merged_values[code] += sign * val
-            merged_origin[code] = origin
+            origins = by_code.setdefault(code, {})
+            origin = origin or first_origin
+            origins[origin] = origins.get(origin, 0.0) + sign * val
 
-        return [(code, merged_values[code], merged_origin[code]) for code in merged_values]
+        return [(code, val, origin) for code, origins in by_code.items() for origin, val in origins.items()]
 
     @staticmethod
     def _extract_origin(section_4_text):
@@ -314,7 +319,7 @@ class InvoiceProcessor:
         """
         if not section_4_text:
             return "-"
-        match = re.search(r"Country of origin\s*:\s*([A-Z]{2})", section_4_text, re.IGNORECASE)
+        match = re.search(r"Country of origin\s*:[ \t]*([A-Za-z]{2})\b", section_4_text, re.IGNORECASE)
         return match.group(1).upper() if match else "-"
 
     @staticmethod

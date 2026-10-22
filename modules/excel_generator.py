@@ -66,9 +66,12 @@ class ExcelGenerator:
         self.data["shipment_date"] = self.data["shipment_date"].apply(convert_to_date)
         self.data["nc8_code"] = self.data["nc8_code"].apply(format_nc8_code)
 
-        self.data = self.data.sort_values(by=["vat_number", "shipment_date", "invoice_number"]).reset_index(drop=True)
+        self.data = self.data.sort_values(by=["vat_number", "shipment_date", "invoice_number"],
+                                          kind="stable").reset_index(drop=True)
 
-        self.data.insert(0, "nr_crt", self.data.groupby("vat_number").cumcount() + 1)
+        # Nr Crt counts invoices inside a VAT group (rows of one invoice share the number), as in the customer's files
+        self.data.insert(0, "nr_crt", self.data.groupby("vat_number")["invoice_number"]
+                         .transform(lambda s: s.ne(s.shift()).cumsum()))
         self.data["percentage"] = self.percentage
 
         for col in ["transport", "statistic"]:
@@ -97,8 +100,8 @@ class ExcelGenerator:
         existing = self._collect_existing_keys(ws, struct, header_map)
 
         df = self.data.dropna(subset=['invoice_number'])
-        new_records = [row for _, row in df.iterrows() if
-                       (row.vat_number, row.invoice_number, row.nc8_code) not in existing]
+        # an invoice already in the workbook is left untouched, whatever its rows look like now
+        new_records = [row for _, row in df.iterrows() if (row.vat_number, row.invoice_number) not in existing]
 
         if not new_records:
             return
@@ -299,14 +302,13 @@ class ExcelGenerator:
 
     @staticmethod
     def _collect_existing_keys(ws, struct, cmap):
-        """Collect existing invoice keys to avoid duplicates."""
+        """Collect the (vat, invoice) pairs already in the workbook."""
         keys = set()
         for r in range(struct['data_start'], struct['data_end'] + 1):
             vat = ws.cell(r, cmap['vat_number']).value
             inv = ws.cell(r, cmap['invoice_number']).value
-            nc = ws.cell(r, cmap['nc8_code']).value
-            if vat and inv and nc and not str(vat).startswith('Total '):
-                keys.add((str(vat), int(inv), str(nc)))
+            if vat and inv and not str(vat).startswith('Total '):
+                keys.add((str(vat), int(inv)))
         return keys
 
     @staticmethod
@@ -397,7 +399,7 @@ class ExcelGenerator:
             except (ValueError, TypeError):
                 continue
 
-            if (date_val, inv) >= (target_date, target_invoice):
+            if (date_val, inv) > (target_date, target_invoice):  # rows of one invoice stay in extraction order
                 return r
 
         return None
@@ -494,9 +496,10 @@ class ExcelGenerator:
 
     @staticmethod
     def _recompute_nr_crt(ws, struct, header_map):
-        """Recompute and rewrite the nr_crt sequence for each VAT block, starting at 1."""
+        """Recompute and rewrite the nr_crt sequence for each VAT block, starting at 1 (one number per invoice)."""
         nr_crt_col = header_map['nr_crt']
         vat_col = header_map['vat_number']
+        invoice_col = header_map['invoice_number']
 
         for vat, group in struct['vat_groups'].items():
             start = group.get('start')
@@ -505,15 +508,18 @@ class ExcelGenerator:
             if not start or not end:
                 continue
 
-            counter = 1
+            counter, previous_invoice = 0, object()
 
             for row in range(start, end):
                 cell_value = ws.cell(row=row, column=vat_col).value
                 if isinstance(cell_value, str) and cell_value.startswith('Total '):
                     continue
 
+                invoice = ws.cell(row=row, column=invoice_col).value
+                if invoice != previous_invoice:
+                    counter += 1
+                    previous_invoice = invoice
                 ws.cell(row=row, column=nr_crt_col).value = counter
-                counter += 1
 
     @staticmethod
     def _insert_total_rows(ws, struct, header_map):
