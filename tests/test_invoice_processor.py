@@ -95,5 +95,28 @@ class TestExtractNc8Codes(unittest.TestCase):
         self.assertEqual(result, [("INTERNAL ORDER", 0, "RO")])
 
 
+
+class TestProcessInvoicesProblems(unittest.TestCase):
+    def test_missing_exchange_rate_aborts_the_run_with_a_message(self):
+        from unittest.mock import patch
+        from functions import ExchangeRateUnavailable
+
+        def boom(_path):
+            raise ExchangeRateUnavailable("Cursul BNR pentru 03.03.2025 nu a putut fi obținut")
+
+        with patch.object(InvoiceProcessor, "_process_single_invoice", staticmethod(boom)):
+            processor = InvoiceProcessor(["a.pdf", "b.pdf"])
+            processor.process_invoices()
+        self.assertIn("Cursul BNR", processor.fatal_error)
+        self.assertTrue(processor.df.empty)
+
+    def test_unreadable_pdf_is_listed_as_a_problem(self):
+        processor = InvoiceProcessor([r"C:\does\not\exist\missing.pdf"])
+        processor.process_invoices()
+        self.assertIsNone(processor.fatal_error)
+        self.assertEqual(len(processor.problems), 1)
+        self.assertIn("missing.pdf", processor.problems[0])
+        self.assertTrue(processor.df.empty)
+
 if __name__ == "__main__":
     unittest.main()

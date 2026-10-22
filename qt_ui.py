@@ -52,7 +52,7 @@ class ProcessingThread(QThread):
     Background thread that processes PDF invoices, generates an Excel file,
     and emits signals for progress and completion.
     """
-    finished = pyqtSignal(str, pd.DataFrame)
+    finished = pyqtSignal(str, pd.DataFrame, list)
     progress_signal = pyqtSignal(int)
 
     def __init__(self, pdf_files, percentage, existing_excel=None):
@@ -65,6 +65,8 @@ class ProcessingThread(QThread):
         self.pdf_files = pdf_files
         self.percentage = percentage
         self.existing_excel = existing_excel
+        self.temp_names = {}
+        self.copy_problems = []
 
     def copy_files_to_temp(self, temp_dir: str):
         """
@@ -72,13 +74,21 @@ class ProcessingThread(QThread):
         :return: List of new file paths.
         """
         temp_paths = []
-        for pdf in self.pdf_files:
+        for i, pdf in enumerate(self.pdf_files):
             try:
-                temp_path = shutil.copy(str(Path(pdf)), os.path.join(temp_dir, Path(pdf).name))
+                # index prefix: files with the same name in different folders must not overwrite each other
+                temp_path = shutil.copy(str(Path(pdf)), os.path.join(temp_dir, f"{i:04d}_{Path(pdf).name}"))
                 temp_paths.append(temp_path)
+                self.temp_names[os.path.basename(temp_path)] = Path(pdf).name
             except Exception as e:
                 logger.error(f"Error copying file {pdf}: {e}")
+                self.copy_problems.append(f"{Path(pdf).name}: fișierul nu a putut fi copiat ({e})")
         return temp_paths
+
+    def _with_original_names(self, message):
+        for temp_name, original in self.temp_names.items():
+            message = message.replace(temp_name, original)
+        return message
 
     @staticmethod
     def generate_excel_filename():
@@ -90,13 +100,16 @@ class ProcessingThread(QThread):
     def process_invoices(self):
         """
         Process PDF invoices in a temp directory; create the final Excel file.
-        :return: Final path of the generated Excel and DataFrame.
+        :return: Final path of the generated Excel, DataFrame and the list of problem messages.
         """
         try:
             with TemporaryDirectory() as temp_dir:
                 temp_paths = self.copy_files_to_temp(temp_dir)
                 processor = InvoiceProcessor(temp_paths, progress_callback=self._progress_callback)
                 processor.process_invoices()
+                if processor.fatal_error:
+                    return "", pd.DataFrame(), [processor.fatal_error]
+                problems = self.copy_problems + [self._with_original_names(m) for m in processor.problems]
 
                 excel_filename = self.generate_excel_filename()
                 temp_excel_path = os.path.join(temp_dir, excel_filename)
@@ -106,10 +119,10 @@ class ProcessingThread(QThread):
                 final_path = os.path.join(os.getcwd(), excel_filename)
                 shutil.move(temp_excel_path, final_path)
 
-                return final_path, processor.df
+                return final_path, processor.df, problems
         except Exception as e:
             logger.error(f"Error in process_invoices: {e}")
-            return "", pd.DataFrame()
+            return "", pd.DataFrame(), []
 
     def _progress_callback(self, processed, total):
         """
@@ -123,11 +136,11 @@ class ProcessingThread(QThread):
         Run the invoice processing; emit 'finished' with the output path and DataFrame.
         """
         try:
-            output_path, df = self.process_invoices()
-            self.finished.emit(output_path, df)
+            output_path, df, problems = self.process_invoices()
+            self.finished.emit(output_path, df, problems)
         except Exception as e:
             logger.error(f"Error in ProcessingThread: {e}")
-            self.finished.emit("", pd.DataFrame())
+            self.finished.emit("", pd.DataFrame(), [])
 
 
 # noinspection PyUnresolvedReferences
@@ -661,7 +674,7 @@ class PDFToExcelApp(QWidget):
         """
         self.progress_bar.setValue(value)
 
-    def handle_processing_finished(self, output_path, df):
+    def handle_processing_finished(self, output_path, df, problems):
         """
         Handle finishing of processing: re-enable controls, update status,
         show success dialog (with Save/Discard), and handle saving or cleanup.
@@ -680,7 +693,7 @@ class PDFToExcelApp(QWidget):
         if not output_path or not os.path.exists(output_path):
             self.status_label.setText("Procesare eșuată. Verifică fișierele PDF și încearcă din nou.")
             self.status_message.setText("Procesare eșuată")
-            self.show_message("Eroare de procesare",
+            self.show_message("Eroare de procesare", problems[0] if problems else
                               "Nu s-au putut procesa fișierele PDF. Verifică validitatea fișierelor și încearcă din nou.",
                               QMessageBox.Icon.Critical)
             return
@@ -699,11 +712,18 @@ class PDFToExcelApp(QWidget):
         self.status_label.setText(text)
 
         dlg = QMessageBox(self)
-        dlg.setIcon(QMessageBox.Icon.Information)
-        dlg.setWindowTitle("Procesare finalizată cu succes")
-        dlg.setText("PDF-urile au fost procesate cu succes!")
+        if problems:
+            dlg.setIcon(QMessageBox.Icon.Warning)
+            dlg.setWindowTitle("Procesare finalizată cu avertismente")
+            dlg.setText(f"PDF-urile au fost procesate, dar {len(problems)} fișier(e) au probleme.")
+            dlg.setDetailedText("\n".join(problems))
+        else:
+            dlg.setIcon(QMessageBox.Icon.Information)
+            dlg.setWindowTitle("Procesare finalizată cu succes")
+            dlg.setText("PDF-urile au fost procesate cu succes!")
         dlg.setInformativeText(f"Au fost procesate {len(self.pdf_files)} fișiere PDF.\n"
-                               f"Au fost extrase {num_new} înregistrări.")
+                               f"Au fost extrase {num_new} înregistrări."
+                               + ("\nApasă „Show Details…” pentru lista fișierelor cu probleme." if problems else ""))
         dlg.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard)
         dlg.setDefaultButton(QMessageBox.StandardButton.Save)
 

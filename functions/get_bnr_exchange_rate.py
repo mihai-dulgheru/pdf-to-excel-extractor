@@ -1,8 +1,20 @@
+import logging
 from datetime import timedelta
 from functools import lru_cache
 
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger("pdf_to_excel.exchange_rate")
+
+REQUEST_TIMEOUT_SECONDS = 15
+
+
+class ExchangeRateUnavailable(RuntimeError):
+    """
+    No BNR rate could be fetched for a date. Raised (not returned as None) so that lru_cache does not
+    remember the failure: a later call in the same session can succeed once the network is back.
+    """
 
 
 @lru_cache(maxsize=128)
@@ -10,6 +22,7 @@ def get_bnr_exchange_rate(invoice_date, currency="EUR"):
     """
     Retrieves the RON-to-EUR exchange rate from BNR data for a specific date.
     If the rate is not available for the given date, it searches for prior days.
+    Raises ExchangeRateUnavailable when nothing could be fetched.
     """
 
     max_attempts = 5
@@ -18,7 +31,7 @@ def get_bnr_exchange_rate(invoice_date, currency="EUR"):
 
         try:
             bnr_url = f"https://www.cursbnr.ro/arhiva-curs-bnr-{date_to_check}"
-            response = requests.get(bnr_url)
+            response = requests.get(bnr_url, timeout=REQUEST_TIMEOUT_SECONDS)
 
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, "html.parser")
@@ -29,13 +42,13 @@ def get_bnr_exchange_rate(invoice_date, currency="EUR"):
                     exchange_rate = float(currency_row.text.replace(",", "."))
                     return exchange_rate
                 else:
-                    print(f"[LOG] Exchange rate not found for {date_to_check}.")
+                    logger.warning(f"Exchange rate not found for {date_to_check}.")
 
             else:
-                print(f"[LOG] Error fetching exchange rate from BNR: {response.status_code} {response.reason}")
+                logger.warning(f"Error fetching exchange rate from BNR: {response.status_code} {response.reason}")
 
         except Exception as e:
-            print(f"[LOG] Exception while fetching exchange rate: {e}")
+            logger.warning(f"Exception while fetching exchange rate: {e}")
 
-    print(f"[LOG] Could not fetch exchange rate for {currency} after {max_attempts} attempts.")
-    return None
+    raise ExchangeRateUnavailable(f"Cursul BNR pentru {invoice_date:%d.%m.%Y} nu a putut fi obținut după "
+                                  f"{max_attempts} încercări. Verifică conexiunea la internet și reîncearcă.")

@@ -1,4 +1,6 @@
 import concurrent.futures
+import logging
+import os
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -7,10 +9,21 @@ import pandas as pd
 import pdfplumber
 
 from config import Constants
-from functions import calculate_coordinates, get_country_code_from_address, get_bnr_exchange_rate, \
-    get_delivery_location, get_previous_workday, parse_mixed_number, get_logger
+from functions import ExchangeRateUnavailable, calculate_coordinates, get_country_code_from_address, \
+    get_bnr_exchange_rate, get_delivery_location, get_previous_workday, parse_mixed_number, get_logger
 
 logger = get_logger("pdf_to_excel.invoice_processor")
+
+
+class _ProblemCollector(logging.Handler):
+    """Keeps every WARNING+ message emitted during one run, so the UI can show them."""
+
+    def __init__(self):
+        super().__init__(level=logging.WARNING)
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
 
 
 class InvoiceProcessor:
@@ -18,7 +31,7 @@ class InvoiceProcessor:
     Extracts invoice data from PDF files into a pandas DataFrame.
     """
 
-    __slots__ = ("input_paths", "df", "progress_callback")
+    __slots__ = ("input_paths", "df", "progress_callback", "problems", "fatal_error")
 
     def __init__(self, paths, progress_callback=None):
         """
@@ -28,11 +41,16 @@ class InvoiceProcessor:
         self.input_paths = paths
         self.df = pd.DataFrame(columns=Constants.COLUMNS)
         self.progress_callback = progress_callback
+        self.problems = []
+        self.fatal_error = None
 
     def process_invoices(self):
         """
         Parse each PDF file in parallel, then aggregate it results in self.df.
+        Per-file problems are collected in self.problems; a missing BNR rate aborts the run (self.fatal_error).
         """
+        collector = _ProblemCollector()
+        logger.addHandler(collector)
         try:
             total = len(self.input_paths)
             results = []
@@ -44,17 +62,25 @@ class InvoiceProcessor:
                 for future in concurrent.futures.as_completed(future_map):
                     path = future_map[future]
                     try:
-                        result = future.result()
-                        results.extend(result)
+                        results.extend(future.result())
+                    except ExchangeRateUnavailable as e:
+                        self.fatal_error = str(e)
+                        logger.error(self.fatal_error)
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
                     except Exception as e:
-                        logger.error(f"Error processing {path}: {e}")
+                        logger.error(f"{os.path.basename(path)}: {e}")
                     processed += 1
                     if self.progress_callback:
                         self.progress_callback(processed, total)
 
-            self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
+            if self.fatal_error is None:
+                self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
         except Exception as e:
             logger.error(f"Error in process_invoices: {e}")
+        finally:
+            logger.removeHandler(collector)
+            self.problems = collector.messages
 
     @staticmethod
     def _process_single_invoice(pdf_path):
@@ -117,8 +143,8 @@ class InvoiceProcessor:
                     per_code_total = sum(val for _, val, _ in nc8_data)
                     invoice_total = invoice_value_eur if currency == "EUR" else invoice_value_ron
                     if abs(per_code_total - invoice_total) > 0.01:
-                        logger.warning(f"{pdf_path}: per-code values sum to {per_code_total:.2f}, "
-                                       f"invoice total is {invoice_total:.2f}")
+                        logger.warning(f"{os.path.basename(pdf_path)}: valorile pe cod însumează "
+                                       f"{per_code_total:.2f}, totalul facturii este {invoice_total:.2f}")
                     values_only = [(code, val) for (code, val, _) in nc8_data]
                     proportional_weights = InvoiceProcessor._calculate_proportional_weights(values_only,
                                                                                             total_net_weight)
@@ -145,8 +171,10 @@ class InvoiceProcessor:
                         results.append(result)
 
                     return results
+        except ExchangeRateUnavailable:
+            raise
         except Exception as e:
-            logger.error(f"Error processing PDF {pdf_path}: {e}")
+            logger.error(f"{os.path.basename(pdf_path)}: fișierul nu a putut fi citit ({e})")
             return []
 
     @staticmethod
