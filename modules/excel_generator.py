@@ -1,12 +1,12 @@
 import os
 import re
+import shutil
 from datetime import datetime, date
 from functools import lru_cache
 
 import openpyxl
 import pandas as pd
 from openpyxl import Workbook
-from openpyxl.formula.translate import Translator, TranslatorError
 from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 
@@ -22,7 +22,7 @@ class ExcelGenerator:
     including formatting, formula generation, and appending to existing files.
     """
 
-    __slots__ = ("data", "percentage")
+    __slots__ = ("data", "percentage", "appended")
 
     def __init__(self, data, percentage=0.6):
         """
@@ -30,6 +30,7 @@ class ExcelGenerator:
         """
         self.data = data
         self.percentage = percentage
+        self.appended = pd.DataFrame(columns=getattr(data, "columns", None))  # rows actually written in append mode
 
     def generate_excel(self, path, existing_excel=None):
         """
@@ -82,73 +83,107 @@ class ExcelGenerator:
 
     def _append_new_invoices_to_workbook(self, src_path, dest_path):
         """
-        Append non-duplicate invoice records into a copy of the workbook.
-
-        Takes an existing workbook at src_path, adds new records from self.data,
-        and saves the result to dest_path, preserving formatting and formulas.
+        Append the invoices not yet in the workbook into a copy of it (dest_path), keeping the customer's rows,
+        formats and formulas. Every row insert/delete is recorded as an event; at the end each pre-existing
+        formula is re-pointed by replaying those events, so formulas outside the table (e.g. a hand-made grand
+        total under it) stay correct. The rows actually written are left in self.appended.
         """
-        if not os.path.exists(src_path) or self.data.empty:
-            return
-
         wb = openpyxl.load_workbook(src_path)
-        ws = wb.active
+        ws = self._sheet_with_header(wb)
+        header_map = self._map_headers(ws)
         formats = Constants.COLUMN_FORMATS
 
-        header_map = self._map_headers(ws)
-        self._remove_total_rows(ws, header_map)
+        events = []  # ("insert" | "delete", row), in the order applied to ws
+        snapshot = [(c.row, c.column, c.value) for row in ws.iter_rows() for c in row
+                    if isinstance(c.value, str) and c.value.startswith("=")]
+
+        old_totals = self._remove_total_rows(ws, header_map, events)
         struct = self._find_data_block(ws, header_map)
         existing = self._collect_existing_keys(ws, struct, header_map)
 
         df = self.data.dropna(subset=['invoice_number'])
         # an invoice already in the workbook is left untouched, whatever its rows look like now
         new_records = [row for _, row in df.iterrows() if (row.vat_number, row.invoice_number) not in existing]
-
+        self.appended = pd.DataFrame(new_records, columns=self.data.columns)
         if not new_records:
+            shutil.copyfile(src_path, dest_path)  # nothing to add: the output is the input, unchanged
             return
 
+        inserted = []
         for rec in new_records:
             row_idx = self._find_insert_rows(ws, rec, struct, header_map)
             ws.insert_rows(row_idx)
-
+            events.append(("insert", row_idx))
+            inserted.append((len(events), row_idx, rec))
             self._write_record(ws, row_idx, rec, header_map)
 
-            formulas = self._build_formulas_for_row(row_idx, rec)
-            self._apply_formulas_and_formatting(ws, row_idx, rec, header_map, formulas, formats)
-
-        self._update_formulas_after_insertion(ws, struct)
-
         struct = self._find_data_block(ws, header_map)
-
         self._recompute_nr_crt(ws, struct, header_map)
-        self._insert_total_rows(ws, struct, header_map)
+        new_totals = self._insert_total_rows(ws, struct, header_map, events)
 
+        # formulas of the new rows: written once the structure is final, so they reference their own row
+        for done, row_idx, rec in inserted:
+            final_row = self._replay_row(row_idx, events[done:])
+            formulas = self._build_formulas_for_row(final_row, rec)
+            for field, col in header_map.items():
+                cell = ws.cell(row=final_row, column=col)
+                if field in formulas:
+                    cell.value = formulas[field]
+                if field in formats:
+                    cell.number_format = formats[field]
+
+        # pre-existing formulas: move with their cell and follow the rows they point at
+        total_moves = {old_row: new_totals.get(vat) for old_row, vat in old_totals.items()}
+        for row, col, formula in snapshot:
+            if row in old_totals:
+                continue  # total rows are regenerated
+            ws.cell(row=self._replay_row(row, events), column=col).value = self._repoint(formula, events, total_moves)
+
+        wb.active = wb.worksheets.index(ws)  # open on the sheet that received the rows
         wb.save(dest_path)
 
-    @staticmethod
-    def _apply_formulas_and_formatting(ws, row_idx, rec, header_map, formulas, formats):
-        """Apply formulas and formatting to a row."""
-        for field, col in header_map.items():
-            cell = ws.cell(row=row_idx, column=col)
-
-            if field in formulas:
-                cell.value = formulas[field]
-            else:
-                val = rec.get(field)
-                if val is not None:
-                    cell.value = val
-
-            if field in formats:
-                cell.number_format = formats[field]
+    def _sheet_with_header(self, wb):
+        """The worksheet that carries the invoice table header, whichever sheet is active."""
+        for ws in wb.worksheets:
+            if {"vat_number", "invoice_number", "nr_crt"} <= set(self._map_headers(ws)):
+                return ws
+        raise ValueError("Fișierul Excel ales nu are nicio foaie cu antetul așteptat "
+                         "(Nr Crt, Firma, Nr Factura Marfa, ...).")
 
     @staticmethod
-    def _update_formulas_after_insertion(ws, struct):
-        """Update cell references in formulas after row insertions."""
-        for r in range(struct['data_start'], struct['data_end'] + 1):
-            for col in range(1, ws.max_column + 1):
-                cell = ws.cell(row=r, column=col)
-                if isinstance(cell.value, str) and cell.value.startswith('='):
-                    formula = cell.value
-                    cell.value = re.sub(r'([A-Z]+)(\d+)', lambda m: f"{m.group(1)}{r}", formula)
+    def _replay_row(row, events, range_start=False):
+        """Where a row that existed before `events` sits after them (callers skip deleted rows).
+        A range starting at the table top (row 2) stays put when a row is inserted there, so a SUM over the
+        whole table grows; every other reference moves exactly as Excel would move it."""
+        for kind, pos in events:
+            if kind == "insert":
+                if row > pos or (row == pos and not (range_start and pos == 2)):
+                    row += 1
+            elif row > pos:
+                row -= 1
+        return row
+
+    # ponytail: A1 references only; sheet-qualified refs are left alone, quoted text is skipped as a whole
+    _CELL_REF = re.compile(r'("(?:[^"]|"")*")|'
+                           r"(?<![A-Za-z0-9_.!])(\$?[A-Z]{1,3}\$?)(\d+)(?![0-9(])(?::(\$?[A-Z]{1,3}\$?)(\d+))?")
+
+    @classmethod
+    def _repoint(cls, formula, events, total_moves):
+        """Shift every row reference of a pre-existing formula through `events`; refs to a removed total row
+        follow that VAT group's re-created total row."""
+
+        def moved(row, range_start=False):
+            return total_moves.get(row) or cls._replay_row(row, events, range_start)
+
+        def shift(match):
+            if match.group(1) is not None:
+                return match.group(1)  # string literal, e.g. a VAT number in a SUMIF criterion
+            col1, row1, col2, row2 = match.groups()[1:]
+            if col2 is None:
+                return f"{col1}{moved(int(row1))}"
+            return f"{col1}{moved(int(row1), range_start=True)}:{col2}{moved(int(row2))}"
+
+        return cls._CELL_REF.sub(shift, formula)
 
     def _add_excel_formulas(self):
         """
@@ -481,18 +516,20 @@ class ExcelGenerator:
         return formulas
 
     @staticmethod
-    def _remove_total_rows(ws, header_map):
-        """Remove all existing 'Total {vat_number}' rows from the worksheet."""
+    def _remove_total_rows(ws, header_map, events):
+        """Remove all 'Total {vat_number}' rows; return {original row: vat} and record the deletions."""
         vat_col = header_map['vat_number']
-        rows_to_delete = []
+        totals = {}
 
         for row in range(2, ws.max_row + 1):
             cell_value = ws.cell(row=row, column=vat_col).value
             if isinstance(cell_value, str) and cell_value.startswith('Total '):
-                rows_to_delete.append(row)
+                totals[row] = cell_value.split(' ', 1)[1]
 
-        for row in sorted(rows_to_delete, reverse=True):
+        for row in sorted(totals, reverse=True):
             ws.delete_rows(row)
+            events.append(("delete", row))
+        return totals
 
     @staticmethod
     def _recompute_nr_crt(ws, struct, header_map):
@@ -522,9 +559,10 @@ class ExcelGenerator:
                 ws.cell(row=row, column=nr_crt_col).value = counter
 
     @staticmethod
-    def _insert_total_rows(ws, struct, header_map):
-        """Insert a 'Total {vat_number}' row after each VAT block with SUM formulas."""
+    def _insert_total_rows(ws, struct, header_map, events):
+        """Insert a 'Total {vat_number}' row after each VAT block with SUM formulas; return {vat: row}."""
         vat_col = header_map['vat_number']
+        created = {}
 
         vat_items = [(vat, grp['start'], grp['end']) for vat, grp in struct['vat_groups'].items() if
                      grp.get('start') and grp.get('end')]
@@ -536,17 +574,9 @@ class ExcelGenerator:
             new_start = orig_start + total_inserted
             new_end = orig_end + total_inserted
 
-            if total_inserted:
-                for row in ws.iter_rows(min_row=new_start, max_row=new_end - 1):
-                    for cell in row:
-                        if isinstance(cell.value, str) and cell.value.startswith('='):
-                            try:
-                                cell.value = Translator(cell.value, origin=cell.coordinate).translate_formula(
-                                    row_delta=total_inserted)
-                            except TranslatorError:
-                                pass
-
             ws.insert_rows(new_end)
+            events.append(("insert", new_end))
+            created[vat] = new_end
             total_inserted += 1
 
             label_cell = ws.cell(row=new_end, column=vat_col, value=f"Total {vat}")
@@ -561,3 +591,4 @@ class ExcelGenerator:
                     sum_cell.font = Font(bold=True, size=12, name='Arial')
                     if field in Constants.COLUMN_FORMATS:
                         sum_cell.number_format = Constants.COLUMN_FORMATS[field]
+        return created

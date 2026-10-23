@@ -119,10 +119,11 @@ class ProcessingThread(QThread):
                 final_path = os.path.join(os.getcwd(), excel_filename)
                 shutil.move(temp_excel_path, final_path)
 
-                return final_path, processor.df, problems
+                written = generator.appended if self.existing_excel else processor.df
+                return final_path, written, problems
         except Exception as e:
             logger.error(f"Error in process_invoices: {e}")
-            return "", pd.DataFrame(), []
+            return "", pd.DataFrame(), [f"Eroare la generarea fișierului Excel: {e}"]
 
     def _progress_callback(self, processed, total):
         """
@@ -722,7 +723,8 @@ class PDFToExcelApp(QWidget):
             dlg.setWindowTitle("Procesare finalizată cu succes")
             dlg.setText("PDF-urile au fost procesate cu succes!")
         dlg.setInformativeText(f"Au fost procesate {len(self.pdf_files)} fișiere PDF.\n"
-                               f"Au fost extrase {num_new} înregistrări."
+                               + (f"Au fost adăugate {num_new} înregistrări noi." if excel_enabled and self.excel_file
+                                  else f"Au fost extrase {num_new} înregistrări.")
                                + ("\nApasă „Show Details…” pentru lista fișierelor cu probleme." if problems else ""))
         dlg.setStandardButtons(QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard)
         dlg.setDefaultButton(QMessageBox.StandardButton.Save)
@@ -745,13 +747,14 @@ class PDFToExcelApp(QWidget):
         Read the selected Excel and return the number of valid existing rows.
         """
         try:
-            df = pd.read_excel(self.excel_file, dtype=str)
             col = Constants.HEADERS["nr_crt"]
-            if col in df.columns:
-                df = df[df[col].notna()]
-            return len(df)
+            needed = {col, Constants.HEADERS["invoice_number"], Constants.HEADERS["vat_number"]}
+            for df in pd.read_excel(self.excel_file, sheet_name=None, dtype=str).values():
+                if needed <= set(df.columns):  # the sheet the generator writes to, whichever is active
+                    return int(df[col].notna().sum())
+            return 0
         except Exception as e:
-            print(f"[LOG] Error counting existing records: {e}")
+            logger.error(f"Error counting existing records: {e}")
             return 0
 
     def _save_output(self, output_path):
