@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 
 from modules.invoice_processor import InvoiceProcessor
@@ -379,6 +381,61 @@ class TestUnreadableFilesAreNotDuplicates(unittest.TestCase):
             processor.process_invoices()
         self.assertEqual(len(processor.df), 2)
         self.assertEqual(processor.problems, [])
+
+
+def _blank_pdf(path):
+    """A valid one-page PDF with no text at all (what a scanned document looks like to the parser)."""
+    objects = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+               b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>"]
+    out, offsets = bytearray(b"%PDF-1.4\n"), []
+    for i, obj in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode()
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    with open(path, "wb") as f:
+        f.write(out)
+
+
+class TestScannedPdf(unittest.TestCase):
+    def test_pdf_without_text_is_reported_and_produces_no_row(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "scan.pdf")
+            _blank_pdf(path)
+            processor = InvoiceProcessor([path])
+            processor.process_invoices()
+        self.assertTrue(processor.df.empty)
+        self.assertEqual(len(processor.problems), 1)
+        self.assertIn("scanat", processor.problems[0])
+
+
+class TestWeightRounding(unittest.TestCase):
+    def test_rounded_weights_add_up_to_the_invoice_weight(self):
+        """Largest remainder: whole kilograms first, the leftover ones to the biggest fractions (ties: first code)."""
+        thirds = InvoiceProcessor._calculate_proportional_weights([("a", 1.0), ("b", 1.0), ("c", 1.0)], 100)
+        self.assertEqual(sum(w for _, w in thirds), 100)
+        self.assertEqual(thirds[0], ("a", 34))
+        jlr = InvoiceProcessor._calculate_proportional_weights(
+            [("39269097", 58461.02), ("87082990", 31134.42), ("94019920", 446.78)], 1244)
+        self.assertEqual(sum(w for _, w in jlr), 1244)
+        self.assertEqual([w for _, w in jlr][1:], [430, 6])
+
+    def test_no_row_goes_negative_and_credit_note_signs_do_not_matter(self):
+        five = InvoiceProcessor._calculate_proportional_weights([(c, 1.0) for c in "abcde"], 3)
+        self.assertEqual(sum(w for _, w in five), 3)
+        self.assertTrue(all(w >= 0 for _, w in five), five)
+        negative = InvoiceProcessor._calculate_proportional_weights([("a", -2.0), ("b", -1.0)], 3)
+        self.assertEqual(negative, [("a", 2), ("b", 1)])
+
+
+class TestCompanyName(unittest.TestCase):
+    def test_trailing_comma_is_dropped(self):
+        text = "ORDERED BY : 1359000000\nSASAL - ASSENTOS PARA AUTOMOVEIS,\nZONA INDUSTRIAL MONTE CAVALO\nP-3670-273 VOUZELA"
+        self.assertEqual(InvoiceProcessor._extract_company(text), "SASAL - ASSENTOS PARA AUTOMOVEIS")
+        self.assertEqual(InvoiceProcessor._extract_company("ORDERED BY : 1\nACME GMBH ,\nstreet"), "ACME GMBH")
 
 
 if __name__ == "__main__":

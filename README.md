@@ -42,7 +42,6 @@ including:
 - **User Interface**
     - Modern PyQt6-based GUI
     - Progress tracking for file processing
-    - Drag-and-drop file support
     - Error handling and user feedback
 
 ## Installation
@@ -56,7 +55,7 @@ including:
    cd pdf-to-excel-extractor
    ```
 
-2. **Set up Python environment** (Python 3.8+ required):
+2. **Set up Python environment** (Python 3.10+ required):
 
    ```bash
    python -m venv .venv
@@ -91,22 +90,17 @@ structure:
 ```plaintext
 dist/PDFToExcelApp/
 ├── PDFToExcelApp.exe     # Main executable
-├── assets/               # Application assets
-├── config/              # Configuration files
-├── functions/           # Utility functions
-├── modules/             # Core modules
-├── _internal/           # Dependencies and libraries
-├── input/              # Place input PDF files here
-└── output/             # Generated Excel files
+├── assets/               # Application assets (a copy of the ones packaged in _internal)
+├── _internal/            # Dependencies, libraries and the packaged Python modules
+├── config.json          # Last used folder (written by the app)
+└── logs/                # pdf_to_excel.log, rotated at 1 MB (written by the app)
 ```
 
 Key features of the build:
 
 - Multi-file distribution for better performance and easier updates
-- Optimized code with level 2 optimization
 - No console window (runs in windowed mode only)
-- UPX compression is enabled for a smaller file size
-- Stripped binaries for reduced size
+- No bytecode optimization, UPX compression or stripped binaries (see `PDFToExcelApp.spec`)
 
 ## Usage
 
@@ -119,25 +113,25 @@ Key features of the build:
    ```
 
 2. **Process invoices**:
-    - Click "Select Files" or drag-and-drop PDF files
-    - Set the processing percentage (default: 0.6)
-    - Click "Process" to start extraction
+    - Click "Selectează fișiere PDF" or "Selectează dosar cu fișiere PDF"; each selection adds to the list
+    - Set the processing percentage (default: 60%)
+    - Click "Procesează fișierele PDF și generează Excel" to start extraction
     - Monitor progress in the status bar
-    - Access the generated Excel file in the output directory
+    - Choose where to save the generated Excel file in the dialog shown at the end
 
 ### Using the Portable Executable
 
 1. **Launch the application**: Run `PDFToExcelApp.exe`
-2. **Place PDF files** in the `input` directory or use the file selector
+2. **Select PDF files** or a folder with the file selector
 3. **Configure processing** options if needed
-4. **Generate Excel file** which will appear in the `output` directory
+4. **Generate the Excel file** and choose where to save it; `config.json` and `logs/` are written next to the
+   executable
 
 ## Configuration
 
-The application uses several configuration files in the `config` directory:
+The application's configuration lives in the `config` directory:
 
-- `constants.py`: Defines column formats, headers, and other constants
-- `proportions.py`: Configures PDF section extraction coordinates
+- `constants.py`: Column formats, headers, PDF section proportions, application paths and other constants
 
 ## Dependencies
 
@@ -176,7 +170,6 @@ The standalone executable:
 
 - Runs on Windows 10/11 without Python installation
 - Includes all required dependencies
-- Maintains an organized input / output directory structure
 - Preserves full functionality of the source version
 - No additional installation or configuration needed
 

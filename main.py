@@ -19,7 +19,7 @@ def main():
     app.setApplicationVersion(Constants.APPLICATION_VERSION)
     app.setOrganizationName("PDF Extractor")
 
-    app_icon = QIcon("assets/icon.png")
+    app_icon = QIcon(str(Constants.ASSETS_DIR / "icon.png"))
     app.setWindowIcon(app_icon)
 
     window = PDFToExcelApp()

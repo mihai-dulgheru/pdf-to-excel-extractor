@@ -1,4 +1,6 @@
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -8,13 +10,13 @@ class Constants:
     """
     __slots__ = ()
 
-    APPLICATION_VERSION = "1.12.0"
+    APPLICATION_VERSION = "1.13.0"
 
     COLUMN_FORMATS = {"nr_crt": "General", "company": "@", "invoice_number": "0", "nc8_code": "@", "origin": "@",
                       "destination": "@", "invoice_value_eur": "#,##0.00", "net_weight": "#,##0",
-                      "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000", "value_ron": "#,##0.00",
+                      "shipment_date": "dd.mmm", "exchange_rate": "#,##0.0000", "value_ron": "#,##0",
                       "vat_number": "@", "delivery_location": "0", "delivery_condition": "@", "percentage": "0.00",
-                      "transport": "#,##0.00", "statistic": "#,##0.00", }
+                      "transport": "#,##0.00", "statistic": "#,##0", }
 
     COLUMNS = ["company", "invoice_number", "nc8_code", "origin", "destination", "invoice_value_eur", "net_weight",
                "shipment_date", "exchange_rate", "value_ron", "vat_number", "delivery_location", "delivery_condition"]
@@ -54,7 +56,13 @@ class Constants:
                    "section_5": (0.0, 0.93, 1.0, 1.0), }
 
     SCALING_FACTOR = 1.2
-    CONFIG_FILE = "config.json"
+
+    # packaged files (assets, modules) live in PyInstaller's _internal folder; the user's files
+    # (config.json, logs, the generated workbook) next to the executable. From source both are the repo root.
+    BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    ASSETS_DIR = BASE_DIR / "assets"
+    DATA_DIR = Path(sys.executable).parent if getattr(sys, "frozen", False) else BASE_DIR
+    CONFIG_FILE = str(DATA_DIR / "config.json")
     DEFAULT_CODE = 2093
 
     LOCATION_MAPPING = {"BUDESTI": 1759, "CATEASCA": 1826, "CRAIOVA": 1593, }

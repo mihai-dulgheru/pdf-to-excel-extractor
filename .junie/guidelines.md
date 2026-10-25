@@ -8,7 +8,7 @@ build/configuration instructions, testing information, and additional developmen
 ### Development Environment Setup
 
 1. **Python Environment**:
-    - Python 3.8+ is required
+    - Python 3.10+ is required
     - Create a virtual environment:
       ```powershell
       python -m venv .venv
@@ -35,21 +35,17 @@ The application can be packaged as a standalone Windows executable using PyInsta
     - The executable is created in the `dist/PDFToExcelApp` directory
     - The build includes:
         - Multi-file distribution for better performance
-        - Level 2 optimization
-        - UPX compression for smaller file size
         - No console window (windowed mode only)
+        - No bytecode optimization, UPX compression or stripped binaries
 
 3. **Distribution Structure**:
    ```
    dist/PDFToExcelApp/
    ├── PDFToExcelApp.exe     # Main executable
-   ├── assets/               # Application assets
-   ├── config/               # Configuration files
-   ├── functions/            # Utility functions
-   ├── modules/              # Core modules
-   ├── _internal/            # Dependencies and libraries
-   ├── input/                # Place input PDF files here
-   └── output/               # Generated Excel files
+   ├── assets/               # Application assets (a copy of the ones packaged in _internal)
+   ├── _internal/            # Dependencies, libraries and the packaged Python modules
+   ├── config.json           # Last used folder (written by the app)
+   └── logs/                 # Rotating log file (written by the app)
    ```
 
 ## Testing Information

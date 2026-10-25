@@ -4,7 +4,7 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, gettempdir, mkdtemp
 
 import pandas as pd
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QSize, QTimer
@@ -19,6 +19,24 @@ from modules.excel_generator import ExcelGenerator
 from modules.invoice_processor import InvoiceProcessor
 
 logger = get_logger("pdf_to_excel.ui")
+
+
+def asset(name):
+    """Absolute path of a packaged asset, independent of the working directory."""
+    return str(Constants.ASSETS_DIR / name)
+
+
+def discard_staging(output_path):
+    """
+    Remove a generated workbook that is not wanted any more, together with its staging folder, but only when that
+    folder is one process_invoices() created under the temp dir. Anywhere else just the workbook goes.
+    """
+    folder = os.path.dirname(output_path)
+    if os.path.basename(folder).startswith("pdf_to_excel_") and \
+            os.path.normcase(os.path.dirname(folder)) == os.path.normcase(gettempdir()):
+        shutil.rmtree(folder, ignore_errors=True)
+    elif os.path.exists(output_path):
+        os.remove(output_path)
 
 
 def load_last_directory():
@@ -133,7 +151,9 @@ class ProcessingThread(QThread):
                 generator = ExcelGenerator(processor.df, self.percentage)
                 generator.generate_excel(temp_excel_path, self.existing_excel)
 
-                final_path = os.path.join(os.getcwd(), excel_filename)
+                # staged in a folder of its own until the user picks where to save it: a fixed name in a shared
+                # folder could overwrite the workbook saved there earlier today
+                final_path = os.path.join(mkdtemp(prefix="pdf_to_excel_"), excel_filename)
                 shutil.move(temp_excel_path, final_path)
 
                 written = generator.appended if self.existing_excel else processor.df
@@ -169,7 +189,7 @@ class PDFToExcelApp(QWidget):
 
     def __init__(self):
         super().__init__()
-        self.setWindowIcon(QIcon("assets/icon.png"))
+        self.setWindowIcon(QIcon(asset("icon.png")))
         self.resize(1024, 768)
 
         font = QFont("Segoe UI", 10)
@@ -251,7 +271,7 @@ class PDFToExcelApp(QWidget):
         self.excel_path_label = QLabel("Niciun fișier selectat")
 
         self.select_excel_button = QPushButton("  Selectează fișier Excel")
-        self.select_excel_button.setIcon(QIcon("assets/icons/file-excel.svg"))
+        self.select_excel_button.setIcon(QIcon(asset("icons/file-excel.svg")))
         self.select_excel_button.setEnabled(False)
         self.select_excel_button.clicked.connect(self.select_excel_file)
 
@@ -268,12 +288,12 @@ class PDFToExcelApp(QWidget):
         pdf_buttons_layout = QHBoxLayout()
 
         self.select_pdf_button = QPushButton("  Selectează fișiere PDF")
-        self.select_pdf_button.setIcon(QIcon("assets/icons/file-pdf-white.svg"))
+        self.select_pdf_button.setIcon(QIcon(asset("icons/file-pdf-white.svg")))
         self.select_pdf_button.clicked.connect(self.select_pdf_files)
         self.select_pdf_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.select_folder_button = QPushButton("  Selectează dosar cu fișiere PDF")
-        self.select_folder_button.setIcon(QIcon("assets/icons/folder-open.svg"))
+        self.select_folder_button.setIcon(QIcon(asset("icons/folder-open.svg")))
         self.select_folder_button.clicked.connect(self.select_pdf_folder)
         self.select_folder_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
@@ -293,7 +313,17 @@ class PDFToExcelApp(QWidget):
         pdf_layout.addWidget(self.file_list_widget)
 
         self.pdf_count_label = QLabel("Niciun fișier selectat")
-        pdf_layout.addWidget(self.pdf_count_label)
+        self.clear_list_button = QToolButton()
+        self.clear_list_button.setText("Golește lista")
+        self.clear_list_button.setIcon(QIcon(asset("icons/trash-can.svg")))
+        self.clear_list_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.clear_list_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        self.clear_list_button.setEnabled(False)
+        self.clear_list_button.clicked.connect(self.clear_file_list)
+        count_layout = QHBoxLayout()
+        count_layout.addWidget(self.pdf_count_label, 1)
+        count_layout.addWidget(self.clear_list_button)
+        pdf_layout.addLayout(count_layout)
 
         pdf_group.setLayout(pdf_layout)
 
@@ -336,7 +366,7 @@ class PDFToExcelApp(QWidget):
         action_layout.setSpacing(10)
 
         self.process_button = QPushButton("  Procesează fișierele PDF și generează Excel")
-        self.process_button.setIcon(QIcon("assets/icons/circle-play.svg"))
+        self.process_button.setIcon(QIcon(asset("icons/circle-play.svg")))
         self.process_button.setIconSize(QSize(20, 20))
         self.process_button.setEnabled(False)
         self.process_button.clicked.connect(self.start_file_processing)
@@ -383,6 +413,8 @@ class PDFToExcelApp(QWidget):
         content_bg = "#FFFFFF"
         disabled_bg = "#9CA3AF"
         disabled_border = "#6B7280"
+
+        icons = Constants.ASSETS_DIR.joinpath("icons").as_posix()
 
         self.setStyleSheet(f"""
             QWidget {{
@@ -463,16 +495,16 @@ class PDFToExcelApp(QWidget):
                 height: 16px;
             }}
             QRadioButton::indicator:unchecked {{
-                image: url("assets/icons/circle.svg");
+                image: url("{icons}/circle.svg");
             }}
             QRadioButton::indicator:checked {{
-                image: url("assets/icons/circle-dot.svg");
+                image: url("{icons}/circle-dot.svg");
             }}
             QCheckBox::indicator:unchecked {{
-                image: url("assets/icons/square.svg");
+                image: url("{icons}/square.svg");
             }}
             QCheckBox::indicator:checked {{
-                image: url("assets/icons/square-check.svg");
+                image: url("{icons}/square-check.svg");
             }}
 
             QScrollArea {{
@@ -496,21 +528,29 @@ class PDFToExcelApp(QWidget):
         """)
 
     def handle_pdf_selection(self, pdf_files):
-        """Handle the selection of PDF files."""
-        pdf_files = unique_paths(pdf_files)
-        if pdf_files:
-            self.pdf_files = pdf_files
-            self.update_file_list()
-            self.pdf_count_label.setText(f"{len(pdf_files)} fișier(e) PDF selectat(e)")
-            self.last_directory = os.path.dirname(pdf_files[0])
-            save_last_directory(self.last_directory)
-            self.update_process_button_state()
+        """Add the selected PDF files to the list; a file already in the list is kept once."""
+        if not pdf_files:
+            return
+        merged = unique_paths(self.pdf_files + list(pdf_files))
+        added = len(merged) - len(self.pdf_files)
+        self.pdf_files = merged
+        self.update_file_list()
+        self.last_directory = os.path.dirname(pdf_files[0])
+        save_last_directory(self.last_directory)
 
-            self.status_message.setText(f"Au fost adăugate {len(pdf_files)} fișier(e) PDF")
-            QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
+        self.status_message.setText(f"Au fost adăugate {added} fișier(e) PDF" if added
+                                    else "Fișierele selectate erau deja în listă")
+        QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
+
+    def clear_file_list(self):
+        """Empty the list of selected PDF files."""
+        self.pdf_files = []
+        self.update_file_list()
+        self.status_message.setText("Lista de fișiere a fost golită")
+        QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
 
     def update_file_list(self):
-        """Update the file list widget with the selected PDF files."""
+        """Rebuild the file list widget, the count label and the buttons that depend on the list."""
         while self.file_list_layout.count():
             item = self.file_list_layout.takeAt(0)
             if item.widget():
@@ -522,14 +562,14 @@ class PDFToExcelApp(QWidget):
             file_item_layout.setContentsMargins(5, 5, 5, 5)
 
             file_icon = QLabel()
-            file_icon.setPixmap(QPixmap("assets/icons/file-pdf.svg").scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio,
+            file_icon.setPixmap(QPixmap(asset("icons/file-pdf.svg")).scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio,
                                                                             Qt.TransformationMode.SmoothTransformation))
 
             file_name = QLabel(os.path.basename(pdf_file))
             file_name.setToolTip(pdf_file)
 
             remove_button = QToolButton()
-            remove_button.setIcon(QIcon("assets/icons/trash-can.svg"))
+            remove_button.setIcon(QIcon(asset("icons/trash-can.svg")))
             remove_button.setToolTip("Șterge fișierul")
             remove_button.clicked.connect(lambda checked, path=pdf_file, btn=remove_button: self.remove_file(path, btn))
             remove_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
@@ -539,6 +579,11 @@ class PDFToExcelApp(QWidget):
             file_item_layout.addWidget(remove_button)
 
             self.file_list_layout.addWidget(file_item)
+
+        n = len(self.pdf_files)
+        self.pdf_count_label.setText(f"{n} fișier(e) PDF selectat(e)" if n else "Niciun fișier selectat")
+        self.clear_list_button.setEnabled(n > 0)
+        self.update_process_button_state()
 
     def remove_file(self, file_path, btn):
         """
@@ -552,8 +597,6 @@ class PDFToExcelApp(QWidget):
             if file_path in self.pdf_files:
                 self.pdf_files.remove(file_path)
                 self.update_file_list()
-                self.pdf_count_label.setText(f"{len(self.pdf_files)} fișier(e) PDF selectat(e)")
-                self.update_process_button_state()
 
                 self.status_message.setText(f"A fost șters fișierul: {os.path.basename(file_path)}")
                 QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
@@ -670,10 +713,7 @@ class PDFToExcelApp(QWidget):
         if confirm == QMessageBox.StandardButton.No:
             return
 
-        self.process_button.setEnabled(False)
-        self.select_pdf_button.setEnabled(False)
-        self.select_folder_button.setEnabled(False)
-        self.select_excel_button.setEnabled(False)
+        self._set_controls_enabled(False)
 
         self.status_label.setText("Se procesează... Te rog așteaptă.")
         self.status_message.setText("Procesare în desfășurare")
@@ -687,6 +727,20 @@ class PDFToExcelApp(QWidget):
         self.processing_thread.finished.connect(self.handle_processing_finished)
         self.processing_thread.start()
 
+    def _set_controls_enabled(self, enabled):
+        """Lock everything the user could change while the processing thread runs; unlock it afterwards."""
+        for widget in (self.process_button, self.select_pdf_button, self.select_folder_button,
+                       self.create_new_excel, self.append_to_excel, self.percentage_input, self.auto_open,
+                       self.file_list_widget, self.clear_list_button):
+            widget.setEnabled(enabled)
+        self.select_excel_button.setEnabled(enabled and self.append_to_excel.isChecked())
+        if enabled:
+            self.clear_list_button.setEnabled(bool(self.pdf_files))
+            self.update_process_button_state()
+            for btn in (self.process_button, self.select_pdf_button, self.select_folder_button,
+                        self.select_excel_button):
+                btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+
     def handle_progress_update(self, value):
         """
         Update the progress bar with the current progress value.
@@ -698,14 +752,8 @@ class PDFToExcelApp(QWidget):
         Handle finishing of processing: re-enable controls, update status,
         show success dialog (with Save/Discard), and handle saving or cleanup.
         """
-        for btn in (self.process_button, self.select_pdf_button, self.select_folder_button):
-            btn.setEnabled(True)
-            btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-
+        self._set_controls_enabled(True)
         excel_enabled = self.append_to_excel.isChecked()
-        self.select_excel_button.setEnabled(excel_enabled)
-        if excel_enabled:
-            self.select_excel_button.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
 
         self.progress_bar.setValue(100)
 
@@ -756,7 +804,7 @@ class PDFToExcelApp(QWidget):
         if dlg.exec() == QMessageBox.StandardButton.Save:
             self._save_output(output_path)
         else:
-            os.remove(output_path)
+            discard_staging(output_path)
             self.status_label.setText("Fișierul Excel a fost șters.")
             self.status_message.setText("Fișier șters")
 
@@ -783,18 +831,29 @@ class PDFToExcelApp(QWidget):
         save_path, _ = QFileDialog.getSaveFileName(self, "Salvează fișierul Excel generat", default,
                                                    "Excel Files (*.xlsx)")
         if not save_path:
-            os.remove(output_path)
+            discard_staging(output_path)
             self.status_label.setText("Salvarea fișierului Excel a fost anulată.")
             self.status_message.setText("Salvare anulată")
             return
         try:
             shutil.move(output_path, save_path)
-            self.status_label.setText(f"Fișierul Excel a fost salvat cu succes la: {save_path}")
-            self.status_message.setText("Fișier salvat cu succes")
-            self.last_directory = os.path.dirname(save_path)
-            save_last_directory(self.last_directory)
-            if self.auto_open.isChecked():
-                os.startfile(save_path)
         except Exception as e:
-            print(f"[LOG] Error saving file: {e}")
-            self.show_message("Eroare la salvare", f"Eroare la salvarea fișierului: {e}", QMessageBox.Icon.Critical)
+            logger.error(f"Error saving file to {save_path}: {e}")
+            self.status_label.setText(f"Salvarea la {save_path} a eșuat. Fișierul generat a rămas la: {output_path}")
+            self.status_message.setText("Salvare eșuată")
+            self.show_message("Eroare la salvare", f"Fișierul nu a putut fi salvat la:\n{save_path}\n\n{e}\n\n"
+                              "Închide fișierul dacă este deschis în Excel sau alege alt nume, apoi salvează din nou.\n"
+                              "Dacă renunți la salvare, fișierul generat se șterge.", QMessageBox.Icon.Critical)
+            return self._save_output(output_path)  # back to the save dialog: the workbook is still staged
+        discard_staging(output_path)
+        self.status_label.setText(f"Fișierul Excel a fost salvat cu succes la: {save_path}")
+        self.status_message.setText("Fișier salvat cu succes")
+        self.last_directory = os.path.dirname(save_path)
+        save_last_directory(self.last_directory)
+        if self.auto_open.isChecked():
+            try:
+                os.startfile(save_path)
+            except OSError as e:
+                logger.error(f"Error opening {save_path}: {e}")
+                self.show_message("Fișierul nu a putut fi deschis", f"Fișierul a fost salvat la:\n{save_path}\n\n"
+                                  f"dar nu a putut fi deschis automat: {e}", QMessageBox.Icon.Warning)

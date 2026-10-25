@@ -112,6 +112,8 @@ class InvoiceProcessor:
                 first_page = pdf.pages[0]
                 last_page = pdf.pages[-1] if len(pdf.pages) > 0 else first_page
                 page_width, page_height = first_page.width, first_page.height
+                if not first_page.chars:
+                    raise ValueError("PDF scanat sau fără text; are nevoie de OCR")
 
                 s1 = InvoiceProcessor._extract_section_text(first_page, "section_1", page_width, page_height)
                 s2 = InvoiceProcessor._extract_section_text(first_page, "section_2", page_width, page_height)
@@ -234,13 +236,14 @@ class InvoiceProcessor:
     def _extract_company(text):
         """
         Return the company name found after the 'ORDERED BY' (German: 'Bestellt von') line, otherwise 'Unknown'.
+        A trailing comma is dropped: it only announces the address printed on the next line.
         """
         if not text:
             return "Unknown"
         lines = text.split("\n")
         for i, line in enumerate(lines):
             if ("ORDERED BY" in line or "Bestellt von" in line) and i + 1 < len(lines):
-                return lines[i + 1].strip()
+                return lines[i + 1].strip().rstrip(" ,")
         return "Unknown"
 
     @staticmethod
@@ -449,16 +452,23 @@ class InvoiceProcessor:
     def _calculate_proportional_weights(nc8_data, total_weight):
         """
         Calculate proportional weights for each NC8 code based on their values.
-        Returns a list of tuples (nc8_code, proportional_weight).
+        Returns a list of tuples (nc8_code, proportional_weight) whose weights add up to total_weight.
         """
         if not nc8_data or total_weight <= 0:
             return [(code, 0) for code, _ in nc8_data]
 
-        total_value = sum(value for _, value in nc8_data)
+        total_value = sum(abs(value) for _, value in nc8_data)
         if total_value <= 0:
             return [(code, 0) for code, _ in nc8_data]
 
-        return [(code, round(total_weight * value / total_value)) for code, value in nc8_data]
+        # largest remainder: whole kilograms first, the leftover ones to the biggest fractions, so the rows add up
+        # to the invoice weight and no row goes negative
+        shares = [total_weight * abs(value) / total_value for _, value in nc8_data]
+        weights = [int(share) for share in shares]
+        leftover = max(0, round(total_weight) - sum(weights))
+        for i in sorted(range(len(shares)), key=lambda i: weights[i] - shares[i])[:leftover]:
+            weights[i] += 1
+        return [(code, weight) for (code, _), weight in zip(nc8_data, weights)]
 
     @staticmethod
     def _extract_shipment_date(section_1_text):
