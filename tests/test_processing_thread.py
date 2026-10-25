@@ -34,10 +34,27 @@ class TestProcessingThread(unittest.TestCase):
             self.assertTrue(output_path and os.path.exists(output_path))
             os.remove(output_path)
             self.assertEqual(len(problems), 2)
+            # two selected files share a name, so the folder is shown too
+            self.assertTrue(any("A/inv.pdf" in m for m in problems) and any("B/inv.pdf" in m for m in problems))
             for msg in problems:
                 self.assertIn("inv.pdf", msg)
                 self.assertNotIn("0000_", msg)
                 self.assertNotIn("0001_", msg)
+
+
+class TestUniquePaths(unittest.TestCase):
+    def test_same_file_selected_twice_is_kept_once(self):
+        from qt_ui import unique_paths
+        paths = [r"C:\Facturi\a.pdf", r"C:\FACTURI\A.PDF", r"C:\Facturi\..\Facturi\a.pdf", r"C:\Facturi\b.pdf"]
+        self.assertEqual(unique_paths(paths), [r"C:\Facturi\a.pdf", r"C:\Facturi\b.pdf"])
+
+
+class TestOriginalNames(unittest.TestCase):
+    def test_temp_names_are_mapped_back_in_one_pass(self):
+        thread = ProcessingThread([], 0.6)
+        thread.temp_names = {"0000_0001_X.PDF": "0001_X.PDF", "0001_X.PDF": "X.PDF"}
+        self.assertEqual(thread._with_original_names("0000_0001_X.PDF apare și în 0001_X.PDF"),
+                         "0001_X.PDF apare și în X.PDF")
 
 
 if __name__ == "__main__":

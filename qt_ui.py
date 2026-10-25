@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -46,6 +47,17 @@ def save_last_directory(directory: str):
         logger.error("Failed to save last directory")
 
 
+def unique_paths(paths):
+    """The same file selected twice (or via a differently spelled path) is kept once, in selection order."""
+    seen, unique = set(), []
+    for path in paths:
+        key = os.path.normcase(os.path.abspath(path))
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
 # noinspection PyUnresolvedReferences
 class ProcessingThread(QThread):
     """
@@ -74,21 +86,26 @@ class ProcessingThread(QThread):
         :return: List of new file paths.
         """
         temp_paths = []
+        names = [Path(pdf).name for pdf in self.pdf_files]
         for i, pdf in enumerate(self.pdf_files):
+            # messages name the file as selected; when two selected files share a name, the folder is shown too
+            shown = f"{Path(pdf).parent.name}/{Path(pdf).name}" if names.count(Path(pdf).name) > 1 else Path(pdf).name
             try:
                 # index prefix: files with the same name in different folders must not overwrite each other
                 temp_path = shutil.copy(str(Path(pdf)), os.path.join(temp_dir, f"{i:04d}_{Path(pdf).name}"))
                 temp_paths.append(temp_path)
-                self.temp_names[os.path.basename(temp_path)] = Path(pdf).name
+                self.temp_names[os.path.basename(temp_path)] = shown
             except Exception as e:
                 logger.error(f"Error copying file {pdf}: {e}")
-                self.copy_problems.append(f"{Path(pdf).name}: fișierul nu a putut fi copiat ({e})")
+                self.copy_problems.append(f"{shown}: fișierul nu a putut fi copiat ({e})")
         return temp_paths
 
     def _with_original_names(self, message):
-        for temp_name, original in self.temp_names.items():
-            message = message.replace(temp_name, original)
-        return message
+        """Temp names -> selected names, in one pass so a replaced name is never matched again."""
+        if not self.temp_names:
+            return message
+        pattern = "|".join(map(re.escape, sorted(self.temp_names, key=len, reverse=True)))
+        return re.sub(pattern, lambda m: self.temp_names[m.group()], message)
 
     @staticmethod
     def generate_excel_filename():
@@ -480,6 +497,7 @@ class PDFToExcelApp(QWidget):
 
     def handle_pdf_selection(self, pdf_files):
         """Handle the selection of PDF files."""
+        pdf_files = unique_paths(pdf_files)
         if pdf_files:
             self.pdf_files = pdf_files
             self.update_file_list()

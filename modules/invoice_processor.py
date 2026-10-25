@@ -32,6 +32,11 @@ class InvoiceProcessor:
 
     __slots__ = ("input_paths", "df", "progress_callback", "problems", "fatal_error")
 
+    # English and German (Porsche "Gutschrift") labels of the same fields
+    VAT_PATTERN = r"(?:Tax number|KUNDEN UST-IDNR)\s*:\s*(\w+)"
+    DESTINATION_PATTERN = r"(?:Invoiced to|Fakturiert zu)\s*:\s*(.+?)\n(?:Credit transfer|Bankverbindung)"
+    INCOTERMS_PATTERN = r"Incoterms?\s*:\s*(\w+)"
+
     def __init__(self, paths, progress_callback=None):
         """
         :param paths: List of PDF file paths.
@@ -54,6 +59,8 @@ class InvoiceProcessor:
             total = len(self.input_paths)
             results = []
             processed = 0
+            owner_of = {}  # (vat, invoice) -> first file that produced it
+            duplicates = {}  # (file, first file) -> invoices seen twice
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 future_map = {executor.submit(self._process_single_invoice, path): path for path in self.input_paths}
@@ -61,7 +68,14 @@ class InvoiceProcessor:
                 for future in concurrent.futures.as_completed(future_map):
                     path = future_map[future]
                     try:
-                        results.extend(future.result())
+                        for row in future.result():
+                            # unreadable files all say "Unknown": never treat two of them as one invoice
+                            key = path if row["invoice_number"] == "Unknown" else (row["vat_number"], row["invoice_number"])
+                            first = owner_of.setdefault(key, path)
+                            if first == path:
+                                results.append(row)
+                            else:
+                                duplicates.setdefault((path, first), set()).add(row["invoice_number"])
                     except ExchangeRateUnavailable as e:
                         self.fatal_error = str(e)
                         logger.error(self.fatal_error)
@@ -72,6 +86,10 @@ class InvoiceProcessor:
                     processed += 1
                     if self.progress_callback:
                         self.progress_callback(processed, total)
+
+            for (path, first), invoices in duplicates.items():
+                logger.warning(f"{os.path.basename(path)}: factura {', '.join(sorted(invoices))} apare și în "
+                               f"{os.path.basename(first)}; a fost păstrată o singură dată")
 
             if self.fatal_error is None:
                 self.df = pd.DataFrame(results, columns=Constants.COLUMNS)
@@ -100,7 +118,7 @@ class InvoiceProcessor:
                 s3 = InvoiceProcessor._extract_section_text(first_page, "section_3", page_width, page_height)
                 s4 = InvoiceProcessor._extract_section_text(first_page, "section_4", page_width, page_height)
 
-                is_credit_note = "CREDIT NOTE" in s1.upper() if s1 else False
+                is_credit_note = InvoiceProcessor._is_credit_note(s1)
                 is_debit_note = "DEBIT NOTE" in s1.upper() if s1 else False
 
                 company = InvoiceProcessor._extract_company(s2)
@@ -109,14 +127,21 @@ class InvoiceProcessor:
                 nc8_data = InvoiceProcessor._extract_nc8_codes(pdf, first_page, page_width, page_height, is_credit_note,
                                                                origin)
 
-                destination_field = InvoiceProcessor._extract_field(s3, r"Invoiced to\s*:\s*(.+?)\nCredit transfer",
-                                                                    "Unknown", re.DOTALL)
+                destination_field = InvoiceProcessor._extract_field(s3, InvoiceProcessor.DESTINATION_PATTERN, "Unknown",
+                                                                    re.DOTALL)
                 destination = get_country_code_from_address(destination_field)
 
                 invoice_value_eur, invoice_value_ron, currency = InvoiceProcessor._extract_invoice_values(last_page,
                                                                                                           page_width,
                                                                                                           page_height,
                                                                                                           is_credit_note)
+
+                collapsed = InvoiceProcessor._collapse_unparsed(
+                    nc8_data, invoice_value_eur if currency == "EUR" else invoice_value_ron)
+                if collapsed is not nc8_data:
+                    logger.warning(f"{os.path.basename(pdf_path)}: valorile pe articole nu au putut fi citite; "
+                                   f"factura a fost scrisă pe un singur rând")
+                    nc8_data = collapsed
 
                 if nc8_data[0][0] == "INTERNAL ORDER":
                     total_net_weight = 0
@@ -125,9 +150,9 @@ class InvoiceProcessor:
 
                 shipment_date = InvoiceProcessor._extract_shipment_date(s1)
                 exchange_rate = get_bnr_exchange_rate(get_previous_workday(shipment_date))
-                vat_number = InvoiceProcessor._extract_field(s3, r"Tax number\s*:\s*(\w+)", "Unknown", re.IGNORECASE)
+                vat_number = InvoiceProcessor._extract_field(s3, InvoiceProcessor.VAT_PATTERN, "Unknown", re.IGNORECASE)
                 delivery_location = get_delivery_location(s1)
-                delivery_condition = InvoiceProcessor._extract_field(s2, r"Incoterms\s*:\s*(\w+)", "Unknown",
+                delivery_condition = InvoiceProcessor._extract_field(s2, InvoiceProcessor.INCOTERMS_PATTERN, "Unknown",
                                                                      re.IGNORECASE)
 
                 if len(nc8_data) == 1:
@@ -190,15 +215,31 @@ class InvoiceProcessor:
             return ""
 
     @staticmethod
+    def _collapse_unparsed(nc8_data, invoice_total):
+        """
+        No item value could be read although the document has a total: return one row with the codes joined,
+        so the printed total is kept instead of several rows of 0. Otherwise return nc8_data unchanged.
+        """
+        if len(nc8_data) > 1 and abs(sum(val for _, val, _ in nc8_data)) < 0.01 and abs(invoice_total) > 0.01:
+            return [("; ".join(dict.fromkeys(code for code, _, _ in nc8_data)), 0, nc8_data[0][2])]
+        return nc8_data
+
+    @staticmethod
+    def _is_credit_note(section_1_text):
+        """True for an English "Credit Note" or a German "Gutschrift" document."""
+        text = (section_1_text or "").upper()
+        return "CREDIT NOTE" in text or "GUTSCHRIFT" in text
+
+    @staticmethod
     def _extract_company(text):
         """
-        Return the company name found after the 'ORDERED BY' line, otherwise 'Unknown'.
+        Return the company name found after the 'ORDERED BY' (German: 'Bestellt von') line, otherwise 'Unknown'.
         """
         if not text:
             return "Unknown"
         lines = text.split("\n")
         for i, line in enumerate(lines):
-            if "ORDERED BY" in line and i + 1 < len(lines):
+            if ("ORDERED BY" in line or "Bestellt von" in line) and i + 1 < len(lines):
                 return lines[i + 1].strip()
         return "Unknown"
 
@@ -243,12 +284,15 @@ class InvoiceProcessor:
             if "REFERENCE" in s4 and "INTERNAL ORDER" in s4:
                 return [("INTERNAL ORDER", 0, default_origin)]
 
-        # Only "<currency> <net value>" is required (pdfplumber may push the VAT amount onto a third line);
-        # the net value may group thousands with a space ("1 041,40") or with ,/. ("1,041.40", "1.041,40").
-        currency_pattern = re.compile(r"\b(EUR|RON)\b\s+(\d{1,3}(?: \d{3})+[.,]\d{2}|[\d.,]+)", re.IGNORECASE)
+        # Only "<currency> <net value>" is required (pdfplumber may push the VAT amount onto a third line).
+        # The currency token may come out glued to the unit ("PCEUR", "PECUR"); the net value may group thousands
+        # with a space ("1 041,40") or with ,/. ("1,041.40", "1.041,40") and may lose its last digit to a space
+        # ("2.988,6 4" = 2.988,64).
+        currency_pattern = re.compile(r"\b(PCEUR|PECUR|EUR|RON)\b\s+"
+                                      r"(\d{1,3}(?: \d{3})+[.,]\d{2}|[\d.,]+[.,]\d \d(?=\s|$)|[\d.,]+)", re.IGNORECASE)
         specialized_pattern = re.compile(
             r"^[A-Za-z0-9]+\s+PER\s+(?:\d{1,3}(?:[.,]\d{3})+|\d+)\s+PC\s+\d+PC\s+([\d.,]+)\s+([\d.,]+)$")
-        code_pattern = re.compile(r"Commodity Code\s*:\s*(\d+)", re.IGNORECASE)
+        code_pattern = re.compile(r"Commodity Code\s*:\s*(\d*)", re.IGNORECASE)  # value may be blank
         purch_pattern = re.compile(r"purch\. order no\.", re.IGNORECASE)
         origin_pattern = re.compile(r"Country of origin\s*:[ \t]*([A-Za-z]{2})\b", re.IGNORECASE)
 
@@ -285,7 +329,7 @@ class InvoiceProcessor:
                     if purch_pattern.search(l):
                         purch_seen = True
                     if not nc8_code and (cm := code_pattern.search(l)):
-                        nc8_code = cm.group(1)
+                        nc8_code = cm.group(1) or "-"
 
                     if purch_seen and nc8_code:
                         pairs.append((nc8_code, current_val, origin_after(j)))
@@ -294,7 +338,8 @@ class InvoiceProcessor:
                         break
 
             elif cm := code_pattern.search(line):
-                pairs.append((cm.group(1), current_val if current_val is not None else 0.0, origin_after(i)))
+                # an item printed without a code keeps its value under "-", so the invoice total still closes
+                pairs.append((cm.group(1) or "-", current_val if current_val is not None else 0.0, origin_after(i)))
                 current_val = None
 
             i += 1
@@ -309,6 +354,13 @@ class InvoiceProcessor:
             origins = by_code.setdefault(code, {})
             origin = origin or first_origin
             origins[origin] = origins.get(origin, 0.0) + sign * val
+
+        if "-" in by_code and len(by_code) == 2:
+            # a single real code: the items printed without one belong to it (what the customer does by hand);
+            # with several codes the "-" row stays visible so he can place it
+            real = next(code for code in by_code if code != "-")
+            for origin, val in by_code.pop("-").items():
+                by_code[real][origin] = by_code[real].get(origin, 0.0) + val
 
         return [(code, val, origin) for code, origins in by_code.items() for origin, val in origins.items()]
 
@@ -383,6 +435,12 @@ class InvoiceProcessor:
         match = re.search(r"Net weight\s+([\d.,]+)\s+KG", text, re.IGNORECASE)
         if match:
             raw_val = match.group(1)
+            # "1.035 KG" beside a gross weight "4.218,300 KG" is 1,035 kg: when the net weight is printed without
+            # decimals, the gross weight on the same page tells which separator groups thousands
+            gross = re.search(r"Gross Weight\s+([\d.,]+)\s+KG", text, re.IGNORECASE)
+            if gross and "." in gross.group(1) and "," in gross.group(1) and re.fullmatch(r"\d+[.,]\d{3}", raw_val):
+                thousands_sep = "," if gross.group(1).rfind(".") > gross.group(1).rfind(",") else "."
+                raw_val = raw_val.replace(thousands_sep, "")
             num_val = parse_mixed_number(raw_val)
             return round(num_val)
         return 0

@@ -228,5 +228,158 @@ class TestOriginPerItemLayouts(unittest.TestCase):
         self.assertEqual([(c, o) for c, _, o in result], [("94019920", "CZ"), ("94019920", "RO"), ("39199080", "CZ")])
 
 
+GERMAN_SECTION_1 = """\
+FAURECIA UST-IDNR : RO15599111
+Bitte angeben
+Gutschrift
+ZEICHEN DATUM Kunden Nr Lieferant
+9610178330 10.03.25 C032000000 74773"""
+
+GERMAN_SECTION_2 = """\
+Bestellt von : C032000000
+DR. ING. H. C. F. PORSCHE AG
+FFF3 KREDITORENBUCHHALTUNG
+PORSCHEPLATZ 1
+D-70435 STUTTGART
+Incoterm : FCA -"""
+
+GERMAN_SECTION_3 = """\
+Berechnet am : C032000000
+Fakturiert zu : C032000000
+KUNDEN UST-IDNR : DE147799625
+DR. ING. H. C. F. PORSCHE AG
+Bankverbindung
+BRD - Groupe Société Générale BRDEROBU"""
+
+CODE_MISSING_ON_ONE_ITEM = """\
+0010 Part number: A 1PC 1.00 / 1 PC EUR 10.00 0.00
+Purch. order no. : 1
+Commodity Code : 94019920
+Country of origin : RO
+.
+0020 Part number: B 1PC 1.00 / 1 PC EUR 20.00 0.00
+Purch. order no. : 1
+Commodity Code :
+Country of origin : RO
+.
+0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00
+Purch. order no. : 1
+Commodity Code : 94019920
+Country of origin : RO
+"""
+
+
+class TestGermanLayout(unittest.TestCase):
+    def test_gutschrift_is_a_credit_note(self):
+        self.assertTrue(InvoiceProcessor._is_credit_note(GERMAN_SECTION_1))
+        self.assertTrue(InvoiceProcessor._is_credit_note("Original\nCredit Note\n9610210908 06.10.2026"))
+        self.assertFalse(InvoiceProcessor._is_credit_note("Original\nInvoice\n9610201631 23.02.2026"))
+
+    def test_german_field_labels_are_read(self):
+        import re
+        self.assertEqual(InvoiceProcessor._extract_company(GERMAN_SECTION_2), "DR. ING. H. C. F. PORSCHE AG")
+        self.assertEqual(InvoiceProcessor._extract_field(GERMAN_SECTION_3, InvoiceProcessor.VAT_PATTERN, "Unknown",
+                                                         re.IGNORECASE), "DE147799625")
+        self.assertEqual(InvoiceProcessor._extract_field(GERMAN_SECTION_2, InvoiceProcessor.INCOTERMS_PATTERN, "Unknown",
+                                                         re.IGNORECASE), "FCA")
+        destination = InvoiceProcessor._extract_field(GERMAN_SECTION_3, InvoiceProcessor.DESTINATION_PATTERN, "Unknown",
+                                                      re.DOTALL)
+        self.assertIn("DE147799625", destination)
+
+
+class TestNetWeightLocale(unittest.TestCase):
+    def _weight(self, text):
+        return InvoiceProcessor._extract_net_weight(_FakePage(text), False)
+
+    def test_dot_is_a_thousands_separator_when_the_gross_weight_says_so(self):
+        self.assertEqual(self._weight("Total Gross Weight 4.218,300 KG\nTotal Net weight 1.035 KG"), 1035)
+
+    def test_english_and_small_romanian_weights_are_unchanged(self):
+        self.assertEqual(self._weight("Gross Weight 2,822.622 KG\nNet weight 1,243.382 KG"), 1243)
+        self.assertEqual(self._weight("Gross Weight 20,088 KG\nNet weight 9,208 KG"), 9)
+        self.assertEqual(self._weight("Net weight 144.745 KG"), 145)
+
+
+class TestItemsWithoutCode(unittest.TestCase):
+    def test_with_one_real_code_the_codeless_items_join_it(self):
+        """What the customer did by hand in all 11 March 2025 cases: one row with the invoice's only code."""
+        result = _nc8(CODE_MISSING_ON_ONE_ITEM)
+        self.assertEqual([(c, round(v, 2), o) for c, v, o in result], [("94019920", 60.0, "RO")])
+
+    def test_with_several_codes_the_codeless_items_stay_visible_under_a_dash(self):
+        text = CODE_MISSING_ON_ONE_ITEM.replace("0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 94019920", "0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 87082990")
+        result = _nc8(text)
+        self.assertEqual([(c, round(v, 2)) for c, v, _ in result], [("94019920", 10.0), ("-", 20.0), ("87082990", 30.0)])
+
+
+class TestDuplicateInvoicesInOneRun(unittest.TestCase):
+    def test_same_invoice_from_two_files_is_kept_once_and_reported(self):
+        from unittest.mock import patch
+
+        def rows(path):
+            return [{"company": "X", "invoice_number": "9610182120", "nc8_code": "94019920", "origin": "RO",
+                     "destination": "SK", "invoice_value_eur": 143771.13, "net_weight": 7819,
+                     "shipment_date": "11.04.2025", "exchange_rate": 5.0, "value_ron": 718855.65,
+                     "vat_number": "SK2120249945", "delivery_location": 1759, "delivery_condition": "FCA"}]
+
+        with patch.object(InvoiceProcessor, "_process_single_invoice", staticmethod(rows)):
+            processor = InvoiceProcessor([r"C:\a\inv.pdf", r"C:\b\inv_copy.pdf"])
+            processor.process_invoices()
+        self.assertEqual(len(processor.df), 1)
+        self.assertEqual(len(processor.problems), 1)
+        self.assertIn("9610182120", processor.problems[0])
+        self.assertIn("inv.pdf", processor.problems[0])
+        self.assertIn("inv_copy.pdf", processor.problems[0])
+
+
+GARBLED_CURRENCY_TOKENS = """\
+CAR 13 KO GLATT SCHWAR
+0010 Part number: 99P019010106 48PC 62263.24 / 1000 PECUR 2.988,6 4 0,00
+Customer Part. Nb.: 2214425YAAG06
+Purch. order no. : 5500632800
+Commodity Code : 94019920
+Country of origin : RO
+.
+CAV ST SP CL GLATT SCHWARZ SCHWARZ ORANG
+0020 Part number: 99ETSO379011012 1PC 90.35 / 1 PCEUR 90,3 5 0,00
+Customer Part. Nb.: 2258446YQQG12
+Purch. order no. : 4504190099
+Commodity Code : 87082990
+Country of origin : RO
+"""
+
+
+class TestGarbledAmounts(unittest.TestCase):
+    def test_pc_eur_glued_into_pecur_or_pceur_with_detached_last_digit_is_read(self):
+        """FAURECIA SLOVAKIA layout: '1000 PECUR 2.988,6 4 0,00' means EUR 2.988,64."""
+        result = _nc8(GARBLED_CURRENCY_TOKENS)
+        self.assertEqual([(c, round(v, 2)) for c, v, _ in result], [("94019920", 2988.64), ("87082990", 90.35)])
+
+    def test_unparsed_items_collapse_to_one_row_instead_of_zero_rows(self):
+        collapsed = InvoiceProcessor._collapse_unparsed([("94019920", 0.0, "RO"), ("-", 0.0, "RO")], 148107.23)
+        self.assertEqual(collapsed, [("94019920; -", 0, "RO")])
+        kept = [("94019920", 100.0, "RO"), ("-", 20.0, "RO")]
+        self.assertEqual(InvoiceProcessor._collapse_unparsed(kept, 120.0), kept)
+        zero_invoice = [("94019920", 0.0, "RO")]
+        self.assertEqual(InvoiceProcessor._collapse_unparsed(zero_invoice, 0.0), zero_invoice)
+
+
+class TestUnreadableFilesAreNotDuplicates(unittest.TestCase):
+    def test_two_unreadable_files_both_stay_and_no_duplicate_is_reported(self):
+        from unittest.mock import patch
+
+        def unknown_row(path):
+            return [{"company": "Unknown", "invoice_number": "Unknown", "nc8_code": "Unknown", "origin": "-",
+                     "destination": "Unknown", "invoice_value_eur": 0, "net_weight": 0, "shipment_date": "01.01.2026",
+                     "exchange_rate": 5.0, "value_ron": 0, "vat_number": "Unknown", "delivery_location": 2093,
+                     "delivery_condition": "Unknown"}]
+
+        with patch.object(InvoiceProcessor, "_process_single_invoice", staticmethod(unknown_row)):
+            processor = InvoiceProcessor([r"C:\x\scan1.pdf", r"C:\x\scan2.pdf"])
+            processor.process_invoices()
+        self.assertEqual(len(processor.df), 2)
+        self.assertEqual(processor.problems, [])
+
+
 if __name__ == "__main__":
     unittest.main()
