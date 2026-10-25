@@ -1,6 +1,3 @@
-import os
-import shutil
-
 import PyInstaller.__main__
 
 PyInstaller.__main__.run([
@@ -33,6 +30,3 @@ PyInstaller.__main__.run([
     "--noupx",
     "--icon=assets/icon.ico",
 ])
-
-dist_dir = os.path.join(os.getcwd(), "dist", "PDFToExcelApp")
-shutil.copytree("assets", os.path.join(dist_dir, "assets"), dirs_exist_ok=True)

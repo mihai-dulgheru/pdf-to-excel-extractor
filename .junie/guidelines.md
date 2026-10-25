@@ -42,7 +42,6 @@ The application can be packaged as a standalone Windows executable using PyInsta
    ```
    dist/PDFToExcelApp/
    ├── PDFToExcelApp.exe     # Main executable
-   ├── assets/               # Application assets (a copy of the ones packaged in _internal)
    ├── _internal/            # Dependencies, libraries and the packaged Python modules
    ├── config.json           # Last used folder (written by the app)
    └── logs/                 # Rotating log file (written by the app)

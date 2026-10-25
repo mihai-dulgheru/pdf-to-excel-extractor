@@ -42,6 +42,7 @@ including:
 - **User Interface**
     - Modern PyQt6-based GUI
     - Progress tracking for file processing
+    - Drag-and-drop of PDF files and folders onto the window
     - Error handling and user feedback
 
 ## Installation
@@ -90,7 +91,6 @@ structure:
 ```plaintext
 dist/PDFToExcelApp/
 ├── PDFToExcelApp.exe     # Main executable
-├── assets/               # Application assets (a copy of the ones packaged in _internal)
 ├── _internal/            # Dependencies, libraries and the packaged Python modules
 ├── config.json          # Last used folder (written by the app)
 └── logs/                # pdf_to_excel.log, rotated at 1 MB (written by the app)
@@ -113,7 +113,8 @@ Key features of the build:
    ```
 
 2. **Process invoices**:
-    - Click "Selectează fișiere PDF" or "Selectează dosar cu fișiere PDF"; each selection adds to the list
+    - Click "Selectează fișiere PDF" or "Selectează dosar cu fișiere PDF", or drag PDF files and folders onto
+      the window; each selection adds to the list
     - Set the processing percentage (default: 60%)
     - Click "Procesează fișierele PDF și generează Excel" to start extraction
     - Monitor progress in the status bar
@@ -132,6 +133,9 @@ Key features of the build:
 The application's configuration lives in the `config` directory:
 
 - `constants.py`: Column formats, headers, PDF section proportions, application paths and other constants
+
+The application icon is drawn in `assets/icon.svg`; `python tools/make_icon.py` re-renders `assets/icon.png` and
+`assets/icon.ico` from it (run on Windows, where the Segoe UI font used for the labels is available).
 
 ## Dependencies
 

@@ -39,6 +39,18 @@ def discard_staging(output_path):
         os.remove(output_path)
 
 
+def collect_pdfs(paths):
+    """PDF files among the given files and folders (folders searched recursively), in a stable order."""
+    pdfs = []
+    for path in paths:
+        if os.path.isdir(path):
+            for root, _, files in os.walk(path):
+                pdfs += [os.path.join(root, f) for f in sorted(files, key=str.lower) if f.lower().endswith(".pdf")]
+        elif path.lower().endswith(".pdf"):
+            pdfs.append(path)
+    return pdfs
+
+
 def load_last_directory():
     """
     Load the last used directory from the config file.
@@ -191,6 +203,7 @@ class PDFToExcelApp(QWidget):
         super().__init__()
         self.setWindowIcon(QIcon(asset("icon.png")))
         self.resize(1024, 768)
+        self.setAcceptDrops(True)
 
         font = QFont("Segoe UI", 10)
         self.setFont(font)
@@ -226,6 +239,7 @@ class PDFToExcelApp(QWidget):
 
         self.create_content_area()
         self.apply_light_theme()
+        self.update_file_list()  # shows the empty-state hint
 
     def create_content_area(self):
         """Create the main content area with all UI elements."""
@@ -340,15 +354,19 @@ class PDFToExcelApp(QWidget):
         options_layout.setSpacing(10)
 
         percentage_layout = QHBoxLayout()
-        self.percentage_label = QLabel("Procent de calcul (0–99%):")
+        self.percentage_label = QLabel("Procent de calcul:")
         self.percentage_input = QSpinBox()
         self.percentage_input.setRange(0, 99)
         self.percentage_input.setValue(60)
         self.percentage_input.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.percentage_input.wheelEvent = lambda event: None
+        self.percentage_input.setSuffix(" %")
+        self.percentage_input.setFixedWidth(110)
+        self.percentage_input.setToolTip("Coloana „%” din Excel: Statistica = ROUND(Valoare Ron + Transport × %, 0)")
 
         percentage_layout.addWidget(self.percentage_label)
         percentage_layout.addWidget(self.percentage_input)
+        percentage_layout.addStretch()
 
         options_layout.addLayout(percentage_layout)
 
@@ -432,6 +450,11 @@ class PDFToExcelApp(QWidget):
             QLabel {{
                 background-color: transparent;
             }}
+            QLabel#emptyHint {{
+                color: #6B7280;
+                font-style: italic;
+                padding: 16px 20px;
+            }}
 
             QGroupBox {{
                 font-weight: normal;
@@ -473,6 +496,9 @@ class PDFToExcelApp(QWidget):
                 border: 1px solid {border_color};
                 border-radius: 4px;
             }}
+            QSpinBox:disabled, QRadioButton:disabled, QCheckBox:disabled, QToolButton:disabled {{
+                color: {disabled_bg};
+            }}
 
             QProgressBar {{
                 height: 20px;
@@ -506,6 +532,12 @@ class PDFToExcelApp(QWidget):
             QCheckBox::indicator:checked {{
                 image: url("{icons}/square-check.svg");
             }}
+            QRadioButton::indicator:checked:disabled {{
+                image: url("{icons}/circle-dot-disabled.svg");
+            }}
+            QCheckBox::indicator:checked:disabled {{
+                image: url("{icons}/square-check-disabled.svg");
+            }}
 
             QScrollArea {{
                 border: none;
@@ -523,7 +555,6 @@ class PDFToExcelApp(QWidget):
             }}
             QToolButton:disabled {{
                 background-color: transparent;
-                opacity: 0.6;
             }}
         """)
 
@@ -542,6 +573,29 @@ class PDFToExcelApp(QWidget):
                                     else "Fișierele selectate erau deja în listă")
         QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
 
+    def _is_processing(self):
+        return self.processing_thread is not None and self.processing_thread.isRunning()
+
+    def dragEnterEvent(self, event):
+        """Accept PDF files and folders dragged from Explorer, except while a run is in progress."""
+        paths = [url.toLocalFile() for url in event.mimeData().urls()]
+        if not self._is_processing() and any(os.path.isdir(p) or p.lower().endswith(".pdf") for p in paths):
+            # always a copy: answering "move" (Shift held) would make Explorer delete the dropped files
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+
+    def dropEvent(self, event):
+        """Runs inside Explorer's drag, so nothing modal here: a refused drop only leaves a status-bar note."""
+        pdfs = collect_pdfs([url.toLocalFile() for url in event.mimeData().urls()])
+        if not pdfs:
+            event.ignore()
+            self.status_message.setText("Elementele trase nu conțin fișiere PDF")
+            QTimer.singleShot(3000, lambda: self.status_message.setText("Gata"))
+            return
+        event.setDropAction(Qt.DropAction.CopyAction)
+        event.accept()
+        self.handle_pdf_selection(pdfs)
+
     def clear_file_list(self):
         """Empty the list of selected PDF files."""
         self.pdf_files = []
@@ -555,6 +609,13 @@ class PDFToExcelApp(QWidget):
             item = self.file_list_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+        if not self.pdf_files:
+            hint = QLabel("Trage aici fișiere PDF sau un dosar, ori folosește butoanele de mai sus.")
+            hint.setObjectName("emptyHint")
+            hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            hint.setWordWrap(True)
+            self.file_list_layout.addWidget(hint)
 
         for pdf_file in self.pdf_files:
             file_item = QFrame()
@@ -614,6 +675,7 @@ class PDFToExcelApp(QWidget):
         if self.create_new_excel.isChecked():
             self.excel_file = None
             self.excel_path_label.setText("Niciun fișier selectat")
+            self.excel_path_label.setToolTip("")
         self.update_process_button_state()
 
     def show_message(self, title, message, icon: QMessageBox.Icon = QMessageBox.Icon.Information):
@@ -636,6 +698,7 @@ class PDFToExcelApp(QWidget):
         if selected_file:
             self.excel_file = selected_file
             self.excel_path_label.setText(os.path.basename(selected_file))
+            self.excel_path_label.setToolTip(selected_file)
             self.last_directory = os.path.dirname(selected_file)
             save_last_directory(self.last_directory)
             self.update_process_button_state()
@@ -661,12 +724,7 @@ class PDFToExcelApp(QWidget):
                                                            self.last_directory)
 
         if selected_folder:
-            pdf_files = []
-            for root, _, files in os.walk(selected_folder):
-                for file in files:
-                    if file.lower().endswith('.pdf'):
-                        pdf_files.append(os.path.join(root, file))
-
+            pdf_files = collect_pdfs([selected_folder])
             if pdf_files:
                 self.handle_pdf_selection(pdf_files)
             else:

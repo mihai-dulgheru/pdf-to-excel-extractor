@@ -10,7 +10,7 @@ class Constants:
     """
     __slots__ = ()
 
-    APPLICATION_VERSION = "1.13.0"
+    APPLICATION_VERSION = "1.14.0"
 
     COLUMN_FORMATS = {"nr_crt": "General", "company": "@", "invoice_number": "0", "nc8_code": "@", "origin": "@",
                       "destination": "@", "invoice_value_eur": "#,##0.00", "net_weight": "#,##0",
