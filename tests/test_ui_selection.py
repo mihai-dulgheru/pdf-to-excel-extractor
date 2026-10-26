@@ -50,7 +50,8 @@ class TestFileSelection(unittest.TestCase):
         staged = os.path.join(staging, "x.xlsx")
         with open(staged, "wb") as f:
             f.write(b"1")
-        with patch.object(qt_ui.QFileDialog, "getSaveFileName", side_effect=[(r"C:\\busy\\x.xlsx", ""), ("", "")]) as dialog, \
+        with patch.object(qt_ui.QFileDialog, "getSaveFileName",
+                          side_effect=[(r"C:\\busy\\x.xlsx", ""), ("", "")]) as dialog, \
                 patch.object(qt_ui.shutil, "move", side_effect=PermissionError("open in Excel")), \
                 patch.object(self.window, "show_message") as shown:
             self.window._save_output(staged)

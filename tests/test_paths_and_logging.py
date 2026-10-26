@@ -3,9 +3,9 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from unittest.mock import patch
 
 from config import Constants
 from functions import get_logger, setup_logger

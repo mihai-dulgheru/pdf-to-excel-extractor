@@ -819,7 +819,7 @@ class PDFToExcelApp(QWidget):
             self.status_label.setText("Procesare eșuată. Verifică fișierele PDF și încearcă din nou.")
             self.status_message.setText("Procesare eșuată")
             self.show_message("Eroare de procesare", problems[0] if problems else
-                              "Nu s-au putut procesa fișierele PDF. Verifică validitatea fișierelor și încearcă din nou.",
+            "Nu s-au putut procesa fișierele PDF. Verifică validitatea fișierelor și încearcă din nou.",
                               QMessageBox.Icon.Critical)
             return
 
@@ -900,8 +900,9 @@ class PDFToExcelApp(QWidget):
             self.status_label.setText(f"Salvarea la {save_path} a eșuat. Fișierul generat a rămas la: {output_path}")
             self.status_message.setText("Salvare eșuată")
             self.show_message("Eroare la salvare", f"Fișierul nu a putut fi salvat la:\n{save_path}\n\n{e}\n\n"
-                              "Închide fișierul dacă este deschis în Excel sau alege alt nume, apoi salvează din nou.\n"
-                              "Dacă renunți la salvare, fișierul generat se șterge.", QMessageBox.Icon.Critical)
+                                                   "Închide fișierul dacă este deschis în Excel sau alege alt nume, apoi salvează din nou.\n"
+                                                   "Dacă renunți la salvare, fișierul generat se șterge.",
+                              QMessageBox.Icon.Critical)
             return self._save_output(output_path)  # back to the save dialog: the workbook is still staged
         discard_staging(output_path)
         self.status_label.setText(f"Fișierul Excel a fost salvat cu succes la: {save_path}")
@@ -914,4 +915,5 @@ class PDFToExcelApp(QWidget):
             except OSError as e:
                 logger.error(f"Error opening {save_path}: {e}")
                 self.show_message("Fișierul nu a putut fi deschis", f"Fișierul a fost salvat la:\n{save_path}\n\n"
-                                  f"dar nu a putut fi deschis automat: {e}", QMessageBox.Icon.Warning)
+                                                                    f"dar nu a putut fi deschis automat: {e}",
+                                  QMessageBox.Icon.Warning)

@@ -11,13 +11,13 @@ task includes a brief description and rationale.
     - Create log file output option for troubleshooting
 
 2. [ ] Refactor large methods in invoice_processor.py
-    - Break down _process_single_invoice() into smaller, focused methods
+    - Break down _process_single_invoice () into smaller, focused methods
     - Extract repeated patterns into helper methods
     - Improve method naming for better clarity
 
 3. [ ] Refactor large methods in excel_generator.py
-    - Break down _append_new_invoices_to_workbook() into smaller methods
-    - Simplify complex logic in _find_insert_rows()
+    - Break down _append_new_invoices_to_workbook () into smaller methods
+    - Simplify complex logic in _find_insert_rows ()
     - Extract formula generation into a separate utility class
 
 4. [ ] Create a configuration management system

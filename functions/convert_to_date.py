@@ -15,16 +15,18 @@ def convert_to_date(value):
     if isinstance(value, datetime):
         return value
 
-    # If it's a string, try to parse it
+    # If it's a string, try the formats this app meets (the app's dates are European: 03/04/2025 is 3 April),
+    # then let pandas guess
     if isinstance(value, str):
-        try:
-            return datetime.strptime(value, "%d.%m.%Y")
-        except ValueError:
+        for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y"):
             try:
-                # Try alternative formats
-                return pd.to_datetime(value)
+                return datetime.strptime(value, fmt)
             except ValueError:
-                return None
+                pass
+        try:
+            return pd.to_datetime(value)
+        except ValueError:
+            return None
 
     # If it's a float or int (Excel numeric date), convert it
     try:

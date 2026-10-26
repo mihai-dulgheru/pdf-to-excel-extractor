@@ -63,7 +63,8 @@ class TestAppendPerOrigin(unittest.TestCase):
 def _formula_cells(path, sheet=None):
     wb = openpyxl.load_workbook(path)
     ws = wb[sheet] if sheet else wb.active
-    return {c.coordinate: c.value for row in ws.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith("=")}
+    return {c.coordinate: c.value for row in ws.iter_rows() for c in row if
+            isinstance(c.value, str) and c.value.startswith("=")}
 
 
 class TestAppendKeepsFormulasRight(unittest.TestCase):
@@ -76,9 +77,9 @@ class TestAppendKeepsFormulasRight(unittest.TestCase):
             # layout now: 2,3 = A1 rows; 4 = Total A1; 5 = B1 row; 6 = Total B1
             wb = openpyxl.load_workbook(base)
             ws = wb.active
-            ws["R3"] = "=G2*2"                    # a data-row formula pointing at ANOTHER row
+            ws["R3"] = "=G2*2"  # a data-row formula pointing at ANOTHER row
             ws["L8"] = "GRAND TOTAL"
-            ws["K8"] = "=SUM(K4,K6)"              # the two Total rows
+            ws["K8"] = "=SUM(K4,K6)"  # the two Total rows
             ws["H8"] = "=SUM(H2:H6)"
             ws["R8"] = "=K8/2"
             wb.save(base)
@@ -87,8 +88,8 @@ class TestAppendKeepsFormulasRight(unittest.TestCase):
             # new row lands at 2 (invoice 1000 sorts first); totals re-created at 5 and 7; GRAND TOTAL moves to 9
             f = _formula_cells(out)
             self.assertEqual(f["K2"], "=G2*J2")
-            self.assertEqual(f["K3"], "=G3*J3")   # old row 2, moved down by one
-            self.assertEqual(f["R4"], "=G3*2")    # old R3: its target row 2 moved to 3
+            self.assertEqual(f["K3"], "=G3*J3")  # old row 2, moved down by one
+            self.assertEqual(f["R4"], "=G3*2")  # old R3: its target row 2 moved to 3
             self.assertEqual(f["K9"], "=SUM(K5,K7)")
             self.assertEqual(f["H9"], "=SUM(H2:H7)")
             self.assertEqual(f["R9"], "=K9/2")
@@ -120,7 +121,8 @@ class TestAppendEdgeCases(unittest.TestCase):
             gen.generate_excel(out, base)
             self.assertEqual(len(gen.appended), 1)
             wb = openpyxl.load_workbook(out)
-            self.assertEqual([r[2] for r in wb["Invoices"].iter_rows(min_row=2, values_only=True) if r[2]], [1001, 1003])
+            self.assertEqual([r[2] for r in wb["Invoices"].iter_rows(min_row=2, values_only=True) if r[2]],
+                             [1001, 1003])
             self.assertEqual(wb["ERORI"]["A1"].value, 1)
 
     def test_workbook_without_the_expected_header_fails_with_a_clear_message(self):
@@ -140,7 +142,8 @@ class TestRepointEdgeCases(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             base = os.path.join(td, "base.xlsx")
             ExcelGenerator(_df(_row("1001", "94019920", vat="A1"), _row("1002", "94019920", vat="A1"),
-                               _row("3001", "94019920", vat="C1"), _row("3002", "94019920", vat="C1"))).generate_excel(base)
+                               _row("3001", "94019920", vat="C1"), _row("3002", "94019920", vat="C1"))).generate_excel(
+                base)
             # layout: 2,3 = A1; 4 = Total A1; 5,6 = C1; 7 = Total C1
             wb = openpyxl.load_workbook(base)
             wb.active["K9"] = "=SUM(K5:K6)"  # the customer's RON total for client C1

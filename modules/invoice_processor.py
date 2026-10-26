@@ -70,7 +70,8 @@ class InvoiceProcessor:
                     try:
                         for row in future.result():
                             # unreadable files all say "Unknown": never treat two of them as one invoice
-                            key = path if row["invoice_number"] == "Unknown" else (row["vat_number"], row["invoice_number"])
+                            key = path if row["invoice_number"] == "Unknown" else (row["vat_number"],
+                                                                                   row["invoice_number"])
                             first = owner_of.setdefault(key, path)
                             if first == path:
                                 results.append(row)

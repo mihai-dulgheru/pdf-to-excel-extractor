@@ -8,8 +8,9 @@
       <excludeFolder url="file://$MODULE_DIR$/build" />
       <excludeFolder url="file://$MODULE_DIR$/dist" />
       <excludeFolder url="file://$MODULE_DIR$/logs" />
+      <excludeFolder url="file://$MODULE_DIR$/mail" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.13 (pdf-to-excel-extractor)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="C:\repositories\pdf-to-excel-extractor\.venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

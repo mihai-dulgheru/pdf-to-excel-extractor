@@ -97,7 +97,6 @@ class TestExtractNc8Codes(unittest.TestCase):
         self.assertEqual(result, [("INTERNAL ORDER", 0, "RO")])
 
 
-
 class TestProcessInvoicesProblems(unittest.TestCase):
     def test_missing_exchange_rate_aborts_the_run_with_a_message(self):
         from unittest.mock import patch
@@ -119,6 +118,7 @@ class TestProcessInvoicesProblems(unittest.TestCase):
         self.assertEqual(len(processor.problems), 1)
         self.assertIn("missing.pdf", processor.problems[0])
         self.assertTrue(processor.df.empty)
+
 
 MULTI_ORIGIN = """\
 0030 Part number: 92V106011001 30M 3.04 / 1 M EUR 91.20 0.00
@@ -282,8 +282,9 @@ class TestGermanLayout(unittest.TestCase):
         self.assertEqual(InvoiceProcessor._extract_company(GERMAN_SECTION_2), "DR. ING. H. C. F. PORSCHE AG")
         self.assertEqual(InvoiceProcessor._extract_field(GERMAN_SECTION_3, InvoiceProcessor.VAT_PATTERN, "Unknown",
                                                          re.IGNORECASE), "DE147799625")
-        self.assertEqual(InvoiceProcessor._extract_field(GERMAN_SECTION_2, InvoiceProcessor.INCOTERMS_PATTERN, "Unknown",
-                                                         re.IGNORECASE), "FCA")
+        self.assertEqual(
+            InvoiceProcessor._extract_field(GERMAN_SECTION_2, InvoiceProcessor.INCOTERMS_PATTERN, "Unknown",
+                                            re.IGNORECASE), "FCA")
         destination = InvoiceProcessor._extract_field(GERMAN_SECTION_3, InvoiceProcessor.DESTINATION_PATTERN, "Unknown",
                                                       re.DOTALL)
         self.assertIn("DE147799625", destination)
@@ -309,9 +310,12 @@ class TestItemsWithoutCode(unittest.TestCase):
         self.assertEqual([(c, round(v, 2), o) for c, v, o in result], [("94019920", 60.0, "RO")])
 
     def test_with_several_codes_the_codeless_items_stay_visible_under_a_dash(self):
-        text = CODE_MISSING_ON_ONE_ITEM.replace("0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 94019920", "0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 87082990")
+        text = CODE_MISSING_ON_ONE_ITEM.replace(
+            "0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 94019920",
+            "0030 Part number: C 1PC 1.00 / 1 PC EUR 30.00 0.00\nPurch. order no. : 1\nCommodity Code : 87082990")
         result = _nc8(text)
-        self.assertEqual([(c, round(v, 2)) for c, v, _ in result], [("94019920", 10.0), ("-", 20.0), ("87082990", 30.0)])
+        self.assertEqual([(c, round(v, 2)) for c, v, _ in result],
+                         [("94019920", 10.0), ("-", 20.0), ("87082990", 30.0)])
 
 
 class TestDuplicateInvoicesInOneRun(unittest.TestCase):
